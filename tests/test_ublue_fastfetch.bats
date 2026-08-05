@@ -133,3 +133,12 @@ EOF
     [ "${status}" -eq 0 ]
     grep -q -- "--modules cpu" "${WORKDIR}/fastfetch.log"
 }
+
+@test "ublue-fastfetch: exits silently when fastfetch is not in PATH" {
+    # Use a PATH with jq (needed by get_config) but no fastfetch — simulates
+    # a Dakota image where the binary is simply absent.  The script must exit
+    # 0 with no output (no noisy errors in profile.d / fish vendor_conf).
+    run bash -c 'PATH=/usr/bin:/sbin bash "${SCRIPT_UNDER_TEST}"'
+    [ "${status}" -eq 0 ]
+    [ -z "${output}" ]
+}
