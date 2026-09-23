@@ -74,3 +74,7 @@ if [[ "$VEN_ID" == "Framework" && "$SYS_ID" == "Laptop 13 ("* ]]; then
         fi
     fi
 fi
+
+# Record success only after the body ran, so a failing first-boot hook retries
+# next boot instead of being permanently skipped.
+version-script-commit framework system 3
