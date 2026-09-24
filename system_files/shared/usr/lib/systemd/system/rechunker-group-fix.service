@@ -16,8 +16,14 @@
 Description=Fix groups for Legacy rechunker
 ConditionPathExists=/run/ostree-booted
 DefaultDependencies=no
-Wants=local-fs.target
-After=local-fs.target
+# No local-fs.target ordering. Pulling in Wants=local-fs.target /
+# After=local-fs.target created an ordering cycle
+# (local-fs.target -> this unit -> systemd-sysusers.service ->
+# systemd-tmpfiles-setup-dev.service -> local-fs-pre.target -> local-fs.target)
+# that systemd broke by dropping local-fs-pre.target, leaving /var and other
+# fstab mounts unmounted and hanging the boot (common#918, bluefin-lts#391).
+# bootc-sysusers-shadow-sync.service already orders after systemd-remount-fs
+# and systemd-tmpfiles-setup-dev-early, so /etc is writable here without it.
 After=bootc-sysusers-shadow-sync.service
 Before=systemd-sysusers.service
 
