@@ -8,7 +8,7 @@ source "${LIBSETUP}"
 
 version-script framework system 3 || exit 0
 
-set -x
+set -xe
 
 CPU_VENDOR=$(grep "vendor_id" "${SYSROOT}/proc/cpuinfo" | uniq | awk -F": " '{ print $2 }')
 VEN_ID="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/chassis_vendor")"
