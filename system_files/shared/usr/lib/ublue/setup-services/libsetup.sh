@@ -44,42 +44,59 @@ function version-script-commit() {
   TYPE_OF_SERVICE=$2
   VERSION=$3
 
-  _setup_versioning_file
-
+  # Hold the exclusive lock across the whole read-modify-write (create/validate
+  # + jq + mv) so two hooks committing to the same SETUP_CHECKER_FILE cannot
+  # clobber each other's stamp — a lost update would silently re-run the hook
+  # on the next boot. This restores the lock the original version-script held.
+  local lock_file="${SETUP_CHECKER_FILE}.lock"
   local tmp
-  tmp=$(mktemp)
-  if jq ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\" = \"${VERSION}\"" "${SETUP_CHECKER_FILE}" > "${tmp}"; then
-    mv "${tmp}" "${SETUP_CHECKER_FILE}"
-  else
-    rm -f "${tmp}"
-    echo "Error: failed to write version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"
-    return 1
-  fi
+  (
+    flock -x 200
+
+    _ensure_versioning_file
+
+    tmp=$(mktemp)
+    if jq ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\" = \"${VERSION}\"" "${SETUP_CHECKER_FILE}" > "${tmp}"; then
+      mv "${tmp}" "${SETUP_CHECKER_FILE}"
+    else
+      rm -f "${tmp}"
+      echo "Error: failed to write version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"
+      return 1
+    fi
+  ) 200>"${lock_file}"
 
   return 0
 }
 
+# _ensure_versioning_file
+#
+# Ensure $SETUP_CHECKER_FILE exists and holds valid JSON, resetting if it is
+# malformed rather than silently skipping setup. Takes NO lock; callers that
+# also write must hold the lock themselves so the create/validate and the
+# read-modify-write are atomic together.
+_ensure_versioning_file() {
+  if [ ! -e "${SETUP_CHECKER_FILE}" ]; then
+    mkdir -p "$(dirname "${SETUP_CHECKER_FILE}")"
+    echo "{}" > "${SETUP_CHECKER_FILE}"
+  fi
+
+  # Validate JSON; reset if malformed rather than silently skipping setup.
+  if ! jq '.' "${SETUP_CHECKER_FILE}" >/dev/null 2>&1; then
+    echo "Warning: ${SETUP_CHECKER_FILE} is malformed; resetting."
+    echo "{}" > "${SETUP_CHECKER_FILE}"
+  fi
+}
+
 # _setup_versioning_file
 #
-# Ensure $SETUP_CHECKER_FILE exists and holds valid JSON, taking an exclusive
-# lock so concurrent first-boot setup scripts (user-setup + privileged-setup)
-# cannot read the JSON before either has written back, causing duplicate
-# execution. Shared by version-script (the read gate) and version-script-commit
-# (the write).
+# Locking wrapper around _ensure_versioning_file: takes an exclusive lock so
+# concurrent first-boot setup scripts (user-setup + privileged-setup) cannot
+# read the JSON before either has written back, causing duplicate execution.
+# Used by version-script (the read gate), which only reads.
 _setup_versioning_file() {
   local lock_file="${SETUP_CHECKER_FILE}.lock"
   (
     flock -x 200
-
-    if [ ! -e "${SETUP_CHECKER_FILE}" ]; then
-      mkdir -p "$(dirname "${SETUP_CHECKER_FILE}")"
-      echo "{}" > "${SETUP_CHECKER_FILE}"
-    fi
-
-    # Validate JSON; reset if malformed rather than silently skipping setup.
-    if ! jq '.' "${SETUP_CHECKER_FILE}" >/dev/null 2>&1; then
-      echo "Warning: ${SETUP_CHECKER_FILE} is malformed; resetting."
-      echo "{}" > "${SETUP_CHECKER_FILE}"
-    fi
+    _ensure_versioning_file
   ) 200>"${lock_file}"
 }
