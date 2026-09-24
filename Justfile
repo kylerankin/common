@@ -30,6 +30,7 @@ test:
     bats tests/test_dynamic_wallpaper.bats
     bats tests/test_geoclue_latitude.bats
     bats tests/test_brew_preinstall.bats
+    bats tests/test_ai_tools_brewfile.bats
     bats tests/test_validate_brewfiles.bats
     bats tests/test_oem_brew.bats
     bats tests/test_bonedigger_report.bats
