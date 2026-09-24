@@ -22,7 +22,7 @@ fi
 
 version-script asus system 1 || exit 0
 
-set -x
+set -xe
 
 echo "ASUS hardware detected, enabling system services..."
 
