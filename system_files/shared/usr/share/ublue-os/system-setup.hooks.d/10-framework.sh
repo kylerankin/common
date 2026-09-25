@@ -11,9 +11,9 @@ version-script framework system 3 || exit 0
 set -xe
 
 CPU_VENDOR=$(grep "vendor_id" "${SYSROOT}/proc/cpuinfo" | uniq | awk -F": " '{ print $2 }')
-VEN_ID="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/chassis_vendor")"
-BIOS_VERSION="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/bios_version" 2>/dev/null)"
-SYS_ID="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/product_name")"
+VEN_ID="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/chassis_vendor" 2>/dev/null || true)"
+BIOS_VERSION="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/bios_version" 2>/dev/null || true)"
+SYS_ID="$(cat "${SYSROOT}/sys/devices/virtual/dmi/id/product_name" 2>/dev/null || true)"
 
 # Intel Framework hid_sensor_hub karg is obsolete on kernel 6.8+ (brightness keys work natively).
 # Blacklisting hid_sensor_hub breaks ambient light sensor (ALS) and causes shutdown on AC unplug.
