@@ -49,7 +49,6 @@ function version-script-commit() {
   # clobber each other's stamp — a lost update would silently re-run the hook
   # on the next boot. This restores the lock the original version-script held.
   local lock_file="${SETUP_CHECKER_FILE}.lock"
-  local tmp
   (
     flock -x 200
 
@@ -63,9 +62,7 @@ function version-script-commit() {
       echo "Error: failed to write version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"
       return 1
     fi
-  ) 200>"${lock_file}"
-
-  return 0
+  ) 200>"${lock_file}" || return 1
 }
 
 # _ensure_versioning_file
