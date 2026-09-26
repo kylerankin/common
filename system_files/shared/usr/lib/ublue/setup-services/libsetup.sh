@@ -2,22 +2,57 @@
 
 SETUP_CHECKER_FILE="${SETUP_CHECKER_FILE:-$HOME/.local/share/ublue/setup_versioning.json}"
 
-# Meant to be used at the start of any setup service script. Will version your script accordingly on $SETUP_CHECKER_FILE
+# Version gates for setup hooks, recorded in $SETUP_CHECKER_FILE.
 # :target_versioning_name: Whatever you want to name your versioning tag. Please keep it always the same
 # :type_of_service: Must be either `user`, `privileged`, or `system`
 # :version: Target version to check/apply to your file
 #
-# Meant to be used as follows (or similar):
-#   version-script tailscale user 1 || exit 0      # read-only gate at the top of the hook
+# Preferred for new and migrated hooks — record the version only on success:
+#   version-script-check tailscale user 1 || exit 0   # read-only gate at the top of the hook
 #   ... your setup work ...
-#   version-script-commit tailscale user 1         # record success at the end, only on success
+#   version-script-commit tailscale user 1            # record success at the end, only on success
 #
-# version-script is a pure read: it tells the caller whether the hook has run
-# at this version yet, but it does NOT record anything. version-script-commit
-# records the version, so a hook whose body fails (offline machine, masked unit,
-# missing package) never reaches the commit and retries on the next boot instead
-# of being permanently, silently skipped.
+# version-script-check records nothing, so a hook whose body fails (offline
+# machine, masked unit, missing package) never reaches the commit and retries
+# on the next boot instead of being permanently, silently skipped
+# (projectbluefin/common#1137).
+#
+# Legacy check-and-record, kept unchanged for existing callers (including
+# downstream images that ship this library):
+#   version-script tailscale user 1 || exit 0
+# version-script records the version before the hook body runs, so a failing
+# body is still skipped on later runs. Migrate hooks to the pair above.
 function version-script() {
+  TARGET_VERSIONING_NAME=$1
+  TYPE_OF_SERVICE=$2
+  VERSION=$3
+  shift 3
+
+  local lock_file="${SETUP_CHECKER_FILE}.lock"
+
+  # Run the check/write inside a subshell with an exclusive flock so that
+  # concurrent first-boot setup scripts (user-setup + privileged-setup) cannot
+  # read the JSON before either has written back, causing duplicate execution.
+  (
+    flock -x 200
+
+    _ensure_versioning_file
+
+    if [ "$(jq -r -c ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\"" "${SETUP_CHECKER_FILE}")" == "${VERSION}" ]; then
+      echo "Exiting as current version (${VERSION}) for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME} is the same as latest version recorded on ${SETUP_CHECKER_FILE}"
+      exit 1
+    fi
+
+    _write_version
+  ) 200>"${lock_file}"
+
+  return $?
+}
+
+# version-script-check <name> <type> <n>
+# Read-only gate: returns 1 if the hook already ran at this version, 0 if it
+# should run. Records nothing; pair it with version-script-commit.
+function version-script-check() {
   TARGET_VERSIONING_NAME=$1
   TYPE_OF_SERVICE=$2
   VERSION=$3
@@ -38,7 +73,7 @@ function version-script() {
 # version-script-commit <name> <type> <n>
 # Records the version on success. Call this at the end of a hook body, and only
 # when the work succeeded, so a failed first-boot hook retries next boot rather
-# than being permanently skipped. See version-script (the read-only gate).
+# than being permanently skipped. See version-script-check (the read-only gate).
 function version-script-commit() {
   TARGET_VERSIONING_NAME=$1
   TYPE_OF_SERVICE=$2
@@ -47,22 +82,31 @@ function version-script-commit() {
   # Hold the exclusive lock across the whole read-modify-write (create/validate
   # + jq + mv) so two hooks committing to the same SETUP_CHECKER_FILE cannot
   # clobber each other's stamp — a lost update would silently re-run the hook
-  # on the next boot. This restores the lock the original version-script held.
+  # on the next boot.
   local lock_file="${SETUP_CHECKER_FILE}.lock"
   (
     flock -x 200
 
     _ensure_versioning_file
-
-    tmp=$(mktemp)
-    if jq ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\" = \"${VERSION}\"" "${SETUP_CHECKER_FILE}" > "${tmp}"; then
-      mv "${tmp}" "${SETUP_CHECKER_FILE}"
-    else
-      rm -f "${tmp}"
-      echo "Error: failed to write version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"
-      return 1
-    fi
+    _write_version
   ) 200>"${lock_file}" || return 1
+}
+
+# _write_version
+#
+# Record ${VERSION} for ${TYPE_OF_SERVICE}.${TARGET_VERSIONING_NAME} in
+# $SETUP_CHECKER_FILE. Takes NO lock; callers must hold it. Returns non-zero
+# if the write fails.
+_write_version() {
+  local tmp
+  tmp=$(mktemp)
+  if jq ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\" = \"${VERSION}\"" "${SETUP_CHECKER_FILE}" > "${tmp}"; then
+    mv "${tmp}" "${SETUP_CHECKER_FILE}"
+  else
+    rm -f "${tmp}"
+    echo "Error: failed to write version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"
+    return 1
+  fi
 }
 
 # _ensure_versioning_file
@@ -89,7 +133,7 @@ _ensure_versioning_file() {
 # Locking wrapper around _ensure_versioning_file: takes an exclusive lock so
 # concurrent first-boot setup scripts (user-setup + privileged-setup) cannot
 # read the JSON before either has written back, causing duplicate execution.
-# Used by version-script (the read gate), which only reads.
+# Used by version-script-check (the read gate), which only reads.
 _setup_versioning_file() {
   local lock_file="${SETUP_CHECKER_FILE}.lock"
   (

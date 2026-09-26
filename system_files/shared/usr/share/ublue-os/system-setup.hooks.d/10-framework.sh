@@ -6,7 +6,7 @@ LIBSETUP="${LIBSETUP:-/usr/lib/ublue/setup-services/libsetup.sh}"
 SYSROOT="${SYSROOT:-}"
 source "${LIBSETUP}"
 
-version-script framework system 3 || exit 0
+version-script-check framework system 3 || exit 0
 
 set -xe
 

@@ -101,8 +101,8 @@ teardown() {
     [ ! -e "${WORKDIR}/wallpaper.log" ]
 }
 
-# Regression guard for projectbluefin/common#1137: version-script is now a pure
-# read gate and the version is only committed by version-script-commit at the
+# Regression guard for projectbluefin/common#1137: the hook gates with the
+# read-only version-script-check and only commits via version-script-commit at the
 # end of the body. A run that dies at `systemctl enable` must NOT burn the
 # version, so a later healthy run retries instead of being permanently skipped.
 @test "20-dynamic-wallpaper: a failed run retries instead of burning the version" {

@@ -3,7 +3,7 @@
 # shellcheck disable=SC1091
 source /usr/lib/ublue/setup-services/libsetup.sh
 
-version-script theming user 2 || exit 0
+version-script-check theming user 2 || exit 0
 
 set -xeuo pipefail
 
