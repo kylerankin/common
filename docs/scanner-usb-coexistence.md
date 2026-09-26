@@ -2,12 +2,9 @@
 
 > Issue: [projectbluefin/common#1214](https://github.com/projectbluefin/common/issues/1214)
 > Parent epic: [projectbluefin/common#1210](https://github.com/projectbluefin/common/issues/1210)
-> Status: **design note**. The synthetic coverage this PR once shipped was
-> dropped in review (see below): it asserted properties of a resolver written
-> inside the test file, and `common` ships no `ipp-usb` config for a test to
-> validate, so it could not catch a regression. This document records the model
-> and the reversible policy knob; the coverage is re-provable only once Bluefin
-> ships a real `ipp-usb` policy.
+> Status: **design note**. `common` ships no `ipp-usb` configuration today, so
+> there is nothing in the image for a test to validate; this document records
+> the ownership model and the reversible policy knobs for when Bluefin does.
 
 How a single multifunction (MFP) USB device — printer **and** scanner on one
 USB body — is owned without two user-space consumers fighting over the same
@@ -21,13 +18,13 @@ physical USB device. Three consumers can claim them:
 | Consumer | Path | Claims |
 |----------|------|--------|
 | `ipp-usb` | `libusb` — opens the device, detaches the kernel driver from each interface, then claims it | serves IPP/eSCL over the IPP-over-USB interfaces it claims |
-| `cups` (usb backend) | kernel `usblp` driver | raw printer interface |
+| `cups` (usb backend) | `libusb` interface claim (Fedora builds `cups` against `libusb-1.0`; the kernel `usblp` path is used only when CUPS is built without it) | raw printer interface |
 | `sane` (raw backend) | `libusb` interface claim | raw scanner interface |
 
-`ipp-usb` and the SANE raw backend both use `libusb` interface claims, so they
-are mutually exclusive **per interface**: once `ipp-usb` claims an interface,
-the same `libusb` claim cannot also be held by SANE on it. So an interface has
-exactly one `libusb` owner — or the two consumers collide.
+All three use `libusb` interface claims, so they are mutually exclusive **per
+interface**: once one consumer claims an interface, no other consumer can claim
+that same interface. So an interface has exactly one `libusb` owner — or the
+consumers collide.
 
 ## How `ipp-usb` actually takes a device
 
@@ -39,12 +36,14 @@ exactly one `libusb` owner — or the two consumers collide.
 3. claims the interfaces it serves with `libusb_claim_interface`.
 
 It only claims **IPP-over-USB** interfaces — USB interface class 7 (printer),
-subclass 1, protocol 4, plus `255/9/3` on some HP models (`IsIppOverUsb` in
-`usbcommon.go`). eSCL scanning travels over those same claimed interfaces; there
-is no separate scanner interface that `ipp-usb` claims on top of printing.
+subclass 1, protocol 4, plus `255/9/1` on some HP devices (vendor `0x03f0`)
+(`IsIppOverUsb` in `usbcommon.go`). eSCL scanning travels over those same
+claimed interfaces; there is no separate scanner interface that `ipp-usb` claims
+on top of printing. Because step 2 detaches the kernel driver from **every**
+interface, `usblp` is not bound to any interface while `ipp-usb` holds the
+device.
 
-Two misconceptions in the earlier draft are worth pinning down, because a test
-built on them proves nothing:
+Two points worth pinning down:
 
 - **There is no kernel `usbscanner` driver.** Current kernels ship `usblp`
   (printer) and `usbip-host` (the USB/IP backend `ipp-usb` uses only in its own
@@ -55,22 +54,25 @@ built on them proves nothing:
 
 ## The principle: one owner per logical interface
 
-Coexistence is possible precisely because the printer and scanner are
-**different logical interfaces** — or, on most MFPs, because `ipp-usb` serves
-only the printer interface and leaves the scanner to SANE. The rule:
+Coexistence is possible only where the printer and scanner functions sit on
+**different logical interfaces**: `ipp-usb` claims the IPP-over-USB interfaces,
+and a separate vendor-specific scanner interface, if the device has one, is left
+unclaimed for SANE to take. On devices whose only scan path is eSCL over the
+IPP-over-USB interfaces, there is nothing for SANE's raw backend to claim while
+`ipp-usb` runs. The rule:
 
 > Each logical USB interface on a device has exactly one owner. Different
 > consumers may own different interfaces of the same physical device without
 > conflict.
 
-- Printer interface → owned by `ipp-usb` (IPP) **or** `cups` (`usblp`).
+- Printer interface → owned by `ipp-usb` (IPP) **or** `cups` (usb backend).
 - Scanner interface → owned by `ipp-usb` (eSCL, over the IPP-over-USB
   interfaces) **or** `sane` (raw `libusb`).
 - A `mass_storage` / card-reader interface has no print/scan owner.
 
-When `ipp-usb` serves the printer but **does not claim** the scanner (the
-scanner has no eSCL function, or the device policy says so), `ipp-usb` owns the
-printer and `sane` owns the scanner on the same physical device — coexistence.
+When `ipp-usb` serves the IPP-over-USB interfaces and the scanner is a separate
+vendor-specific interface, `ipp-usb` owns the printer and `sane` owns the
+scanner on the same physical device — coexistence.
 
 ## The reversible policy knob: ipp-usb quirks
 
@@ -79,11 +81,26 @@ as drop-in configs in **`/etc/ipp-usb/quirks/*.conf`**:
 
 | Quirk | Effect |
 |-------|--------|
-| `disable-scan` | `ipp-usb` stops offering eSCL but **keeps its interfaces claimed**. The scanner interface stays with `ipp-usb`; SANE cannot claim it. |
-| `blacklist = true` | `ipp-usb` leaves the device alone entirely. The whole device (printer and scanner) is free for `cups`/`sane`. |
+| `disable-scan = true` | `ipp-usb` stops offering eSCL but **keeps its interfaces claimed**. The scanner interface stays with `ipp-usb`; SANE cannot claim it. |
+| `blacklist = true` | `ipp-usb` leaves the device alone entirely (checked before it detaches kernel drivers or claims anything). The whole device (printer and scanner) is free for `cups`/`sane`. |
 
-These are the two knobs a reversible Bluefin policy can expose. `blacklist` is
-the coarse one that actually releases the scanner to SANE; `disable-scan` only
+Quirk files use INI syntax; the section name selects the device by USB HWID
+(`VID:PID` from `lsusb`) or by model name (from `ipp-usb check`). A HWID match
+is the most specific and is applied before `ipp-usb` reads the model name:
+
+```ini
+# /etc/ipp-usb/quirks/local-release.conf
+# Replace 04b8:1234 with the device's VID:PID from lsusb.
+[04b8:1234]
+  blacklist = true
+```
+
+Deleting the file and restarting `ipp-usb.service` restores the default.
+Stopping or masking `ipp-usb.service` is the system-wide equivalent for every
+device.
+
+These are the knobs a reversible Bluefin policy can expose. `blacklist` is
+the one that actually releases the scanner to SANE; `disable-scan` only
 removes the eSCL function while still holding the interfaces. A per-device
 quirk is intentionally coarse — that is the documented ceiling; a
 per-interface ACL would need a real device to justify.
