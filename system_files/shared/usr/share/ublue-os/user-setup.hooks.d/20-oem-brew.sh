@@ -21,7 +21,7 @@ esac
 
 [[ -d "${OEM_DIR}/${VENDOR}" ]] || exit 0
 
-# Check brew before version-script: if brew is absent on first login we must
+# Check brew before version-script-check: if brew is absent on first login we must
 # not record completion — the version is only committed once the body succeeds.
 if [[ ! -x "${BREW_BIN}" ]]; then
     echo "oem-brew: brew not found, will retry on next login"
@@ -31,7 +31,7 @@ fi
 set -xeuo pipefail
 eval "$("${BREW_BIN}" shellenv)"
 
-if version-script "oem-${VENDOR}" user 2; then
+if version-script-check "oem-${VENDOR}" user 2; then
     brew bundle --file="${OEM_DIR}/${VENDOR}/packages.Brewfile"
 
     if [[ "${VENDOR}" == "ASUS" ]]; then

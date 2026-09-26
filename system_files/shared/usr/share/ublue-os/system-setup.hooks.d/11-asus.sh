@@ -20,7 +20,7 @@ if ! systemctl list-unit-files asusd.service &>/dev/null; then
     exit 0
 fi
 
-version-script asus system 1 || exit 0
+version-script-check asus system 1 || exit 0
 
 set -xe
 

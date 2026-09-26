@@ -8,11 +8,12 @@ Part of [oem-hardware-hooks](../SKILL.md) — version-script safe/anti-patterns;
 
 ### Canonical safe pattern (from `11-asus.sh` and `20-oem-brew.sh`)
 
-`version-script` is a **read-only gate** — it tells you whether the hook has
-already run at this version, but it writes nothing. `version-script-commit`
+`version-script-check` is a **read-only gate** — it tells you whether the hook
+has already run at this version, but it writes nothing. `version-script-commit`
 **writes the stamp**, and it is only reached if the hook body got there
 without failing. Split the two so a failing body never records and retries
-next boot (this is projectbluefin/common#1137):
+next boot (this is projectbluefin/common#1137). The legacy `version-script`
+records before the body runs; it is kept only for existing downstream callers.
 
 ```bash
 set -euo pipefail
@@ -21,11 +22,11 @@ source /usr/lib/ublue/setup-services/libsetup.sh
 # Check ALL transient preconditions first.
 if [[ ! -x "${BREW_BIN}" ]]; then
     echo "hook: brew not found, will retry on next login"
-    exit 0   # ← exit 0 to retry; version-script not yet committed
+    exit 0   # ← exit 0 to retry; nothing committed yet
 fi
 
-# Read-only gate at the top: `|| exit 0` retries if already at this version.
-version-script myfeature user 1 || exit 0
+# Read-only gate at the top: `|| exit 0` exits if already at this version.
+version-script-check myfeature user 1 || exit 0
 
 # ... your setup work ...
 
@@ -37,16 +38,16 @@ version-script-commit myfeature user 1
 ### Anti-pattern to avoid
 
 ```bash
-# A body that fails before version-script-commit still must not record.
-version-script myfeature user 1 || exit 0   # gate only — this does NOT stamp
-# ... work that exits 1 with no recovery, before version-script-commit ...
+# Legacy gate: version-script records the stamp BEFORE the body runs.
+version-script myfeature user 1 || exit 0
+# ... work that exits 1 ... — the stamp is already written, so the hook is
+# permanently skipped on every later run.
 ```
 
-The old failure mode — stamping and then hitting an `exit 1` path — can no longer
-permanently burn a hook, because `version-script` no longer writes. But a body
-that fails *before* `version-script-commit` still must not record: keep
-transient failures on `exit 0`, and add `set -e` so hard failures abort before
-the commit.
+Use `version-script-check` + `version-script-commit` instead. A body that
+fails *before* `version-script-commit` must not record: keep transient
+failures on `exit 0`, and add `set -e` so hard failures abort before the
+commit.
 
 ---
 
@@ -54,7 +55,9 @@ the commit.
 
 1. Copy the script verbatim to the corresponding hooks.d directory in common
 2. Add `# shellcheck disable=SC1091` before the `source` line
-3. Keep the same `version-script` version number (do not bump)
+3. Keep the same version number (do not bump); if the hook still uses the
+   legacy `version-script`, switch it to `version-script-check` plus a
+   `version-script-commit` at the end of the body
 4. If the hook depends on icon SVGs, copy them to
    `system_files/shared/usr/share/icons/hicolor/scalable/actions/`
 5. Open a PR in common
