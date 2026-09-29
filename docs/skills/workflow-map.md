@@ -52,13 +52,15 @@ Load this when you need to understand **what each GitHub workflow in `projectblu
 
 ### Unit suite registration
 
-Register maintained suites in both the `Justfile` test recipe and
-`unit-tests.yml`; the registration drift gate currently checks only the
-Justfile. Install suite dependencies in CI (`jsonschema` for skill docs and
-`just` for recipe execution). Keep script/config pytest suites in a separate
-step from the Bazaar coverage command so unrelated imports do not change its
-coverage denominator. When adding covered source paths, update both PR and
-push filters.
+Both catalogs in `unit-tests.yml` are derived from disk: `bats tests/*.bats`
+runs every bats suite and one pytest invocation runs every `tests/test_*.py`
+under the Bazaar coverage command. Adding a suite therefore only requires
+registering it in the `Justfile` test recipe (the registration drift gate
+checks the Justfile) and dropping the file in `tests/`. Install suite
+dependencies in CI (`jsonschema` for skill docs and `just` for recipe
+execution). New test modules share the Bazaar coverage denominator, so keep
+unrelated imports out of them rather than splitting the step. When adding
+covered source paths, update both PR and push filters.
 
 ### Validation and policy
 
