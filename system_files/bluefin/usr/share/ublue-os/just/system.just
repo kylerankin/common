@@ -479,3 +479,31 @@ check-sb-key:
     else
         echo "Not an EFI system — Secure Boot does not apply."
     fi
+
+# Install Docker (rootless) via Homebrew
+# Installs the docker formula, rootlesskit + slirp4netns, and runs the
+# rootless daemon setup tool to register the per-user docker service.
+[group('System')]
+setup-docker:
+    #!/usr/bin/bash
+    set -euo pipefail
+
+    if ! command -v brew &>/dev/null; then
+        echo "Homebrew is required to install Docker."
+        echo "Install it first: https://docs.projectbluefin.io/administration#homebrew"
+        exit 1
+    fi
+
+    gum confirm "Install Docker (rootless) via Homebrew?" || exit 0
+
+    # 'docker' and 'docker-engine' are the same formula; install once.
+    # rootlesskit + slirp4netns are required for the rootless daemon.
+    brew install docker rootlesskit slirp4netns
+
+    # Register and start dockerd inside the current user's namespace.
+    dockerd-rootless-setuptool.sh install
+
+    gum style \
+        --foreground 2 --border rounded --border-foreground 2 \
+        --align center --width 60 --padding "1 3" \
+        "Docker is installed. Log out and back in to use it."
