@@ -30,20 +30,20 @@ _conf_value() {
 }
 
 @test "dictcheck is disabled so complex passwords are not rejected on the dictionary" {
-    [ "${_conf_value dictcheck}" = "no" ]
+    [ "$(_conf_value dictcheck)" = "0" ]
 }
 
 @test "minclass is set to 3 so a normal complex password reads as strong" {
-    [ "${_conf_value minclass}" = "3" ]
+    [ "$(_conf_value minclass)" = "3" ]
 }
 
 @test "minlen is a sane minimum of 8 characters" {
-    [ "${_conf_value minlen}" = "8" ]
+    [ "$(_conf_value minlen)" = "8" ]
 }
 
-@test "maxrepeat and maxconsecutive are set to sane values" {
-    [ "${_conf_value maxrepeat}" = "3" ]
-    [ "${_conf_value maxconsecutive}" = "3" ]
+@test "maxrepeat and maxsequence are set to sane values" {
+    [ "$(_conf_value maxrepeat)" = "3" ]
+    [ "$(_conf_value maxsequence)" = "3" ]
 }
 
 @test "the config has no trailing whitespace and ends with a newline" {
