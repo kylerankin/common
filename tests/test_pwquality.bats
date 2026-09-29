@@ -8,7 +8,7 @@
 #
 # Run: bats tests/test_pwquality.bats
 
-PWQUALITY_CONF="$BATS_TEST_DIRNAME/../system_files/shared/etc/pwquality.conf"
+PWQUALITY_CONF="$BATS_TEST_DIRNAME/../system_files/shared/etc/security/pwquality.conf.d/10-pwquality.conf"
 
 # Read the value of a `key = value` line from the config, ignoring comments and
 # blank lines. Echoes nothing if the key is absent.
