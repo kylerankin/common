@@ -46,11 +46,14 @@ device.
 Two points worth pinning down:
 
 - **There is no kernel `usbscanner` driver.** Current kernels ship `usblp`
-  (printer) and `usbip-host` (the USB/IP backend `ipp-usb` uses only in its own
-  CI, where it attaches an emulated printer). SANE talks to USB scanners
-  directly through `libusb`, not through a scanner kernel driver.
-- **`ipp-usb` does not bind via `configfs`/`usbip-host` in the field.** The
-  `usbip-host` picture holds only inside `ipp-usb`'s CI emulator.
+  (printer) for the print path; SANE talks to USB scanners directly through
+  `libusb`, not through a scanner kernel driver.
+- **`ipp-usb` does not bind via `configfs` or USB/IP in the field.** USB/IP
+  appears only inside `ipp-usb`'s own CI, and only on the *client* side: the
+  emulated printer is a userspace USB/IP server (`mfp-virtual --usbip`), and
+  the CI attaches it with `usbip attach` through the kernel's `vhci_hcd`
+  virtual host-controller driver. The export-side `usbip-host` driver is not
+  involved, because no real local device is being exported.
 
 ## The principle: one owner per logical interface
 
@@ -105,6 +108,41 @@ removes the eSCL function while still holding the interfaces. A per-device
 quirk is intentionally coarse — that is the documented ceiling; a
 per-interface ACL would need a real device to justify.
 
+## Host vs. rootless Podman consumers
+
+Bluefin users reach these devices from two places: host services (`ipp-usb`,
+host `cups`, host `sane`) and containers, typically a **rootless Podman** CUPS
+or SANE image with `--device /dev/bus/usb/...`. The containerized case does not
+change the ownership rule, because two gates apply in order:
+
+1. **Claim exclusivity is kernel-enforced on the `usbfs` node, not per
+   namespace.** A `libusb` interface claim is recorded by the kernel against
+   the `/dev/bus/usb/BBB/DDD` character device. A container gets the *same*
+   device node as the host, just mapped into its mount namespace, so a
+   containerized CUPS or SANE contends for exactly the same interface as host
+   `ipp-usb`. If `ipp-usb` holds the IPP-over-USB interfaces, the container's
+   claim fails with `LIBUSB_ERROR_BUSY` — identical to the host-vs-host case.
+   Containerization is not an escape hatch; the quirks above are still the
+   knob.
+2. **Rootless adds a udev/`uaccess` ACL gate on top.** Rootless Podman runs the
+   container process as the invoking user's UID, so it can only open the device
+   node if that UID can open it on the host. USB device nodes are `root:root`
+   `0664` by default; access for a normal user comes from the `uaccess` tag
+   that `systemd-udev` applies to the local seat's session user as a POSIX ACL.
+   A device tagged `uaccess` is reachable by the logged-in desktop user, and
+   therefore by their rootless container; a device not tagged (or a user with
+   no local seat session, e.g. over SSH or from a system-level Quadlet running
+   as another UID) gets `EACCES` on open, before any claim is attempted.
+   Rootful Podman bypasses gate 2 but not gate 1.
+
+Practical consequence: a rootless containerized scanner stack needs both the
+ACL (a local seat session, or an explicit udev rule granting the UID) **and**
+an unclaimed interface (`blacklist = true`, or a device whose scanner is a
+separate vendor-specific interface). Neither gate substitutes for the other.
+
+This section is reasoned from the claim and ACL mechanisms, not measured — see
+the unverified list below.
+
 ## Hardware effects: unverified
 
 No physical scanner is available. The following remain **unverified** and must
@@ -115,7 +153,10 @@ be reported as such (per the issue scope):
   will try to serve;
 - SANE backend selection (`auto`/`airscan`/`raw`) once `ipp-usb` is running;
 - which quirk (`disable-scan` vs `blacklist`) a given device needs to release
-  the scanner to SANE without also losing the printer.
+  the scanner to SANE without also losing the printer;
+- the rootless Podman path end to end: the `uaccess` ACL outcome for the
+  container's host UID, and hotplug re-claim races between a container backend
+  and host `ipp-usb` when the device is re-plugged.
 
 ## Recommendation
 
@@ -130,7 +171,7 @@ be reported as such (per the issue scope):
    `ipp-usb` config for it to validate, so it cannot catch a regression. Re-add
    real coverage once Bluefin installs a real `ipp-usb` policy — modelled on
    `ipp-usb`'s own CI, which runs the `go-mfp` emulator (`mfp-virtual --usbip`,
-   then `usbip attach`) rather than a hand-written resolver.
+   then `usbip attach` via `vhci_hcd`) rather than a hand-written resolver.
 
 ## Evidence
 
@@ -143,3 +184,5 @@ be reported as such (per the issue scope):
 - [SANE backends](https://gitlab.com/sane-project/backends) — raw backend.
 - [kernel `usblp`](https://www.kernel.org/doc/html/latest/drivers/usb/usbindex.html) —
   the printer kernel driver; there is no `usbscanner` module.
+- [`systemd-udev` `uaccess`](https://www.freedesktop.org/software/systemd/man/latest/systemd-udevd.service.html) —
+  the seat ACL that gates a rootless container's access to a USB device node.
