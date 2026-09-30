@@ -98,6 +98,9 @@ jobs:
       - name: Run bats (setup scripts)
         run: bats tests/test_setup_scripts.bats
 
+      - name: Run bats (setup-docker)
+        run: bats tests/test_setup_docker.bats
+
       - name: Run bats (privileged setup)
         run: bats tests/test_privileged_setup.bats
 
