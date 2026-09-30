@@ -456,11 +456,12 @@ check-sb-key:
     fi
 
 # Install Docker (rootless) via Homebrew
-# Installs the docker formula, rootlesskit + slirp4netns, and runs the
-# rootless daemon setup tool to register the per-user docker service.
+# Installs the docker CLI plus the docker-engine daemon, rootlesskit and
+# slirp4netns, then runs the rootless daemon setup tool to register the
+# per-user docker service. Aborts early if a rootful daemon socket is live.
 [group('System')]
 setup-docker:
-    #!/usr/bin/bash
+    #!/usr/bin/env bash
     set -euo pipefail
 
     if ! command -v brew &>/dev/null; then
@@ -470,6 +471,17 @@ setup-docker:
     fi
 
     gum confirm "Install Docker (rootless) via Homebrew?" || exit 0
+
+    # dockerd-rootless-setuptool.sh refuses to install while a rootful daemon
+    # socket is reachable, so bail out before brew does any work.
+    docker_socket="${BLUEFIN_DOCKER_SOCKET:-/var/run/docker.sock}"
+    if [ -w "${docker_socket}" ]; then
+        echo "A rootful Docker daemon is running and its socket (${docker_socket}) is writable."
+        echo "dockerd-rootless-setuptool.sh cannot install alongside it."
+        echo "Stop and disable it first, for example:"
+        echo "    sudo systemctl disable --now docker.service docker.socket"
+        exit 1
+    fi
 
     # 'docker' is the CLI only; 'docker-engine' is the daemon and ships
     # dockerd-rootless-setuptool.sh. rootlesskit + slirp4netns are required
