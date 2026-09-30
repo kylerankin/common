@@ -19,6 +19,10 @@ records before the body runs; it is kept only for existing downstream callers.
 set -euo pipefail
 source /usr/lib/ublue/setup-services/libsetup.sh
 
+# Resolve the interpreter up front so the `[[ -x ]]` check below is safe under
+# `set -u` — the example used to reference ${BREW_BIN} without assigning it.
+BREW_BIN="$(command -v brew 2>/dev/null || true)"
+
 # Check ALL transient preconditions first.
 if [[ ! -x "${BREW_BIN}" ]]; then
     echo "hook: brew not found, will retry on next login"
