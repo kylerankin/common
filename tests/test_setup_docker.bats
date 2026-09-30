@@ -14,7 +14,7 @@ _extract_script() {
     local recipe="$1" out_file="$2"
     awk -v recipe="$recipe" '
         $0 ~ ("^" recipe "([[:space:]].*)?:$") { in_recipe=1; next }
-        in_recipe && /^    #!\/usr\/bin\/bash/ { found=1; next }
+        in_recipe && /^    #!\/usr\/bin\/env bash/ { found=1; next }
         found && /^[^[:space:]]/ { exit }
         found { sub(/^    /, ""); print }
     ' "${SYSTEM_JUST}" > "${out_file}"
@@ -72,6 +72,7 @@ _run() {
         PATH="${MOCKDIR}:/usr/bin:/bin" \
         COMMAND_LOG="${COMMAND_LOG}" \
         MOCK_GUM_CONFIRM="${MOCK_GUM_CONFIRM:-1}" \
+        BLUEFIN_DOCKER_SOCKET="${BLUEFIN_DOCKER_SOCKET:-${WORKDIR}/absent-docker.sock}" \
         bash "${SCRIPT}"
 }
 
@@ -103,4 +104,15 @@ _run() {
     [ "${status}" -eq 1 ]
     [[ "${output}" == *"Homebrew is required"* ]]
     ! grep -qF "brew install" "${COMMAND_LOG}"
+}
+
+@test "setup-docker: aborts before installing when a rootful docker socket is writable" {
+    local sock="${WORKDIR}/docker.sock"
+    : > "${sock}"
+    chmod 666 "${sock}"
+    BLUEFIN_DOCKER_SOCKET="${sock}" _run
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"rootful Docker daemon is running"* ]]
+    ! grep -qF "brew install" "${COMMAND_LOG}"
+    ! grep -qF "rootless-setuptool" "${COMMAND_LOG}"
 }
