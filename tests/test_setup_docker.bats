@@ -65,8 +65,11 @@ teardown() {
 }
 
 _run() {
+    # Prepend only the mock dir plus the coreutils the script calls; do not
+    # carry the real PATH, or a machine with Homebrew would run a real
+    # `brew install` in the "brew not installed" case.
     run env \
-        PATH="${MOCKDIR}:${PATH}" \
+        PATH="${MOCKDIR}:/usr/bin:/bin" \
         COMMAND_LOG="${COMMAND_LOG}" \
         MOCK_GUM_CONFIRM="${MOCK_GUM_CONFIRM:-1}" \
         bash "${SCRIPT}"
@@ -75,7 +78,7 @@ _run() {
 @test "setup-docker: installs docker, rootlesskit, slirp4netns then runs rootless setup" {
     _run
     [ "${status}" -eq 0 ]
-    grep -qF "brew install docker rootlesskit slirp4netns" "${COMMAND_LOG}"
+    grep -qF "brew install docker docker-engine rootlesskit slirp4netns" "${COMMAND_LOG}"
     grep -qF "rootless-setuptool install" "${COMMAND_LOG}"
 }
 

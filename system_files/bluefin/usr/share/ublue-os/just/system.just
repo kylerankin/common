@@ -496,9 +496,10 @@ setup-docker:
 
     gum confirm "Install Docker (rootless) via Homebrew?" || exit 0
 
-    # 'docker' and 'docker-engine' are the same formula; install once.
-    # rootlesskit + slirp4netns are required for the rootless daemon.
-    brew install docker rootlesskit slirp4netns
+    # 'docker' is the CLI only; 'docker-engine' is the daemon and ships
+    # dockerd-rootless-setuptool.sh. rootlesskit + slirp4netns are required
+    # for the rootless daemon.
+    brew install docker docker-engine rootlesskit slirp4netns
 
     # Register and start dockerd inside the current user's namespace.
     dockerd-rootless-setuptool.sh install
