@@ -7,8 +7,8 @@ version-script-check theming user 2 || exit 0
 
 set -xeuo pipefail
 
-VEN_ID="$(cat /sys/devices/virtual/dmi/id/chassis_vendor)"
-SYS_ID="$(cat /sys/devices/virtual/dmi/id/product_name)"
+VEN_ID="$(cat /sys/devices/virtual/dmi/id/chassis_vendor 2>/dev/null || true)"
+SYS_ID="$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null || true)"
 
 if [[ ":Framework:" =~ :$VEN_ID: ]]; then
 	echo 'Setting touch scroll type'
