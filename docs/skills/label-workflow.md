@@ -53,10 +53,14 @@ own a lifecycle implementation. Reusable lifecycle automation lives in
 pinned `workflow_call` from each consuming repository's own
 `.github/workflows/bonedigger.yml` (see `bluefin`'s caller for the reference
 shape: `on: issues.opened, issue_comment.created`, `permissions: issues:
-write, contents: read`, `secrets: inherit`). `bluefin-lts`, `dakota`, and `knuckle` call
+write, contents: read`, `secrets: inherit`). `bluefin-lts` and `dakota` call
 the same reusable workflow but with a broader trigger (`issues:
 [opened, labeled, closed]`, `pull_request: [opened]`, and a daily schedule)
-and also grant `pull-requests: write`; `dakota` currently pins bonedigger at a
+and also grant `pull-requests: write`. `knuckle` sits between the two: it
+widens the issue trigger and adds a daily schedule (`issues: [opened,
+labeled, closed]`, `issue_comment: [created]`, `schedule`) but has no
+`pull_request` trigger and keeps `bluefin`'s `issues: write, contents: read`
+permissions. `dakota` currently pins bonedigger at a
 feature-branch build (`aa31855`, `feat/clanker-queue-rollout`) rather than a
 released ref, so its caller should not be read as the reference shape. As of
 this writing that reusable workflow scopes only to `ujust report` intake,
