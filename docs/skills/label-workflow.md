@@ -53,7 +53,7 @@ own a lifecycle implementation. Reusable lifecycle automation lives in
 pinned `workflow_call` from each consuming repository's own
 `.github/workflows/bonedigger.yml` (see `bluefin`'s caller for the reference
 shape: `on: issues.opened, issue_comment.created`, `permissions: issues:
-write, contents: read`, `secrets: inherit`). `bluefin-lts` and `dakota` call
+write, contents: read`, `secrets: inherit`). `bluefin-lts`, `dakota`, and `knuckle` call
 the same reusable workflow but with a broader trigger (`issues:
 [opened, labeled, closed]`, `pull_request: [opened]`, and a daily schedule)
 and also grant `pull-requests: write`; `dakota` currently pins bonedigger at a
