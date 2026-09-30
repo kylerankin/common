@@ -31,7 +31,8 @@ the labels that route user reports into the factory.
 ## When Not to Use
 
 Do not use this skill for generic GitHub issue triage, unrelated GitHub CLI
-configuration, or lifecycle automation owned by `projectbluefin/actions`.
+configuration, or the general issue-admission routing owned by the factory
+lifecycle (`.github/workflows/lifecycle.yml` in `projectbluefin/bonedigger`).
 
 ## Core Process
 
