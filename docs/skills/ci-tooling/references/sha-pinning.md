@@ -43,7 +43,7 @@ gh api repos/actions/checkout/git/ref/tags/v4.2.2 --jq '.object.sha'
 
 ### Internal `projectbluefin/` refs — managed tags, not SHA pins
 
-**All `projectbluefin/` internal workflow refs use managed floating tags (`@main` or `@v1`), not SHA pins.**
+**`projectbluefin/` internal workflow refs use managed floating tags (`@main` or `@v1`), not SHA pins — with one documented exception: the `bonedigger.yml` lifecycle retention pins in the table below.**
 
 The `no-floating-action-tags` pre-commit hook exempts all `projectbluefin/` refs via a negative lookahead. External refs (`actions/`, `docker/`, `taiki-e/`, etc.) are still required to be SHA-pinned.
 
@@ -53,10 +53,12 @@ SHA-pinning internal `projectbluefin/` workflow refs causes a factory cascade: e
 
 | Caller file | Repo(s) | Calls | Ref |
 |---|---|---|---|
-| `bonedigger.yml` | bluefin, bluefin-lts, dakota | `projectbluefin/bonedigger/.github/workflows/lifecycle.yml` | `@v1` |
+| `bonedigger.yml` | bluefin, bluefin-lts, dakota, knuckle | `projectbluefin/bonedigger/.github/workflows/lifecycle.yml` | SHA pin (retention) |
 | `run-testsuite.yml` | bluefin, bluefin-lts, dakota | `projectbluefin/testsuite/.github/workflows/e2e.yml` | `@main` |
 
-**Anti-pattern to avoid:** SHA-pinning `projectbluefin/actions` or `projectbluefin/bonedigger` workflow refs. When a SHA predates the file's existence in the repo, GitHub emits `startup_failure: This run likely failed because of a workflow file issue` with no further diagnosis. See [bonedigger#27](https://github.com/projectbluefin/bonedigger/issues/27).
+**Note:** the `bonedigger.yml` lifecycle callers are the one internal ref that is a full SHA pin rather than a managed floating tag. `lifecycle.yml` was removed from `projectbluefin/bonedigger`'s `main` (bonedigger#40; the workflow is now Hive-managed), so each consumer pins the full commit SHA at which the workflow is retained — a retention pin, not a normal managed-tag call. This is distinct from the anti-pattern below: the pinned SHAs resolve to a file that still exists, so they do not hit the `startup_failure` cascade.
+
+**Anti-pattern to avoid:** SHA-pinning `projectbluefin/actions` workflow refs, or SHA-pinning `projectbluefin/bonedigger` refs for any reason other than the lifecycle retention pins noted above. When a SHA predates the file's existence in the repo, GitHub emits `startup_failure: This run likely failed because of a workflow file issue` with no further diagnosis. See [bonedigger#27](https://github.com/projectbluefin/bonedigger/issues/27).
 
 **Trap: bad semver tags.** The `v1.1.0` tag in `projectbluefin/actions` was cut from commit `95dc404b` (May 31 2026), which predates `lifecycle.yml` being added to that repo (June 10). Anyone who pinned to `v1.1.0` got a broken caller. Always verify a tag commit actually contains the file you're calling before pinning to it. Use `v1` (the managed floating tag).
 
