@@ -85,3 +85,19 @@ _source_lib() {
   run version-script svc-b user 1
   [ "${status}" -eq 1 ]
 }
+
+# The lock file is opened (fd 200) before the subshell body runs, so the parent
+# directory must already exist. On first login the versioning dir
+# (e.g. /root/.local/share/ublue) does not exist yet; version-script must create
+# it rather than failing the flock with "No such file or directory" and skipping
+# the hook. See projectbluefin/common#1325.
+@test "version-script creates the versioning directory when missing" {
+  _source_lib
+  # Point at a path whose parent chain does not exist yet.
+  export SETUP_CHECKER_FILE="${WORKDIR}/does/not/exist/yet/setup_versioning.json"
+  run version-script my-service user 1
+  [ "${status}" -eq 0 ]
+  [ -f "${SETUP_CHECKER_FILE}" ]
+  val="$(jq -r '.version.user."my-service"' "${SETUP_CHECKER_FILE}")"
+  [ "${val}" = "1" ]
+}

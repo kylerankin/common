@@ -17,6 +17,13 @@ function version-script() {
 
   local lock_file="${SETUP_CHECKER_FILE}.lock"
 
+  # Ensure the lock file's parent directory exists before opening fd 200 on it.
+  # The redirection is evaluated before the subshell body runs, so a missing
+  # directory (e.g. /root/.local/share/ublue or
+  # /run/gdm/home/gnome-initial-setup-2/.local/share/ublue on first login) would
+  # fail the flock with "No such file or directory" and skip the hook silently.
+  mkdir -p "$(dirname "${lock_file}")"
+
   # Run the check/write inside a subshell with an exclusive flock so that
   # concurrent first-boot setup scripts (user-setup + privileged-setup) cannot
   # read the JSON before either has written back, causing duplicate execution.
