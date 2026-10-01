@@ -465,8 +465,8 @@ setup-docker:
     set -euo pipefail
 
     if ! command -v brew &>/dev/null; then
-        echo "Homebrew is required to install Docker."
-        echo "Install it first: https://docs.projectbluefin.io/administration#homebrew"
+        echo "Homebrew is required to install Docker." >&2
+        echo "Install it first: https://docs.projectbluefin.io/administration#homebrew" >&2
         exit 1
     fi
 
