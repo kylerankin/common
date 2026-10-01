@@ -32,7 +32,7 @@ labels in each repo's `elements/oci/<app>.bst` must state the FSDK commit that
 the *pinned* `fsdk-containers` commit actually builds on, so the published
 image carries the same source identity as the junction.
 
-## Verified baseline as of 2026-09-29
+## Verified baseline as of 2026-10-01
 
 All four repos, on **both** `testing` and `stable`, carry the same junction
 commit and the same label pair:
