@@ -57,17 +57,19 @@ function version-script-check() {
   TYPE_OF_SERVICE=$2
   VERSION=$3
 
-  # Ensure the checker file exists and is valid JSON (shared with the commit).
-  _setup_versioning_file
-
-  if [ "$(jq -r -c ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\"" "${SETUP_CHECKER_FILE}")" == "${VERSION}" ]; then
-    echo "Exiting as current version (${VERSION}) for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME} is the same as latest version recorded on ${SETUP_CHECKER_FILE}"
-    return 1
-  fi
-
-  # Gate only — do not record here. The caller records success with
-  # version-script-commit once its body has run without failing.
-  return 0
+  # Hold the exclusive lock across create/validate and the version read so a
+  # concurrent version-script-commit cannot stamp between _ensure_versioning_file
+  # and the jq read. The atomic mv in _write_version prevents a torn read, but
+  # holding the lock makes the check-and-return a single atomic step.
+  local lock_file="${SETUP_CHECKER_FILE}.lock"
+  (
+    flock -x 200
+    _ensure_versioning_file
+    if [ "$(jq -r -c ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\"" "${SETUP_CHECKER_FILE}")" == "${VERSION}" ]; then
+      exit 1
+    fi
+    exit 0
+  ) 200>"${lock_file}"
 }
 
 # version-script-commit <name> <type> <n>
@@ -131,9 +133,10 @@ _ensure_versioning_file() {
 # _setup_versioning_file
 #
 # Locking wrapper around _ensure_versioning_file: takes an exclusive lock so
-# concurrent first-boot setup scripts (user-setup + privileged-setup) cannot
-# read the JSON before either has written back, causing duplicate execution.
-# Used by version-script-check (the read gate), which only reads.
+# concurrent first-boot setup scripts cannot read the JSON before either has
+# written back. Used by version-script-check (the read gate), which only reads;
+# version-script-commit holds the same lock across create/validate and the
+# read-modify-write, so the two never interleave.
 _setup_versioning_file() {
   local lock_file="${SETUP_CHECKER_FILE}.lock"
 
