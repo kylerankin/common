@@ -265,7 +265,7 @@ toggle-testing:
     # matched as a JSON string element (surrounded by quotes) so a short tag never
     # matches a longer one such as lts vs lts-testing.
     if command -v skopeo >/dev/null 2>&1; then
-        if tag_list="$(skopeo list-tags "docker://${IMAGE_PATH}" 2>/dev/null)" \
+        if tag_list="$(skopeo list-tags --command-timeout 15s "docker://${IMAGE_PATH}" 2>/dev/null)" \
                 && [[ -n "${tag_list}" ]] \
                 && [[ "${tag_list}" != *\"${NEW_TAG}\"* ]]; then
             echo "Target tag '${NEW_TAG}' does not exist for ${IMAGE_PATH}; refusing to switch."

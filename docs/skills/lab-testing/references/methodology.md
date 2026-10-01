@@ -154,6 +154,15 @@ For each VM, per direction (forward + backward):
 
 Anything else produces: `Cannot toggle testing from channel '<tag>'`
 
+Two newer inputs are refused rather than toggled — both exit 1 without running
+`bootc switch`, so lab evidence should treat exit 1 + the refusal message as
+correct, not as a recipe failure:
+
+| Starting tag | Outcome | Reason |
+|---|---|---|
+| `testing-YYYYMMDD-sha` (dated) | refuse, exit 1 | No `-testing` suffix to strip; the mapped target equals the current tag, so a switch would be a no-op. |
+| `testing` on a testing-only image (e.g. Utah) | refuse, exit 1 | The mapped target (`:stable`) is absent from the registry; skopeo confirms it and the recipe refuses before `bootc` would fail with a manifest error. |
+
 ### Coverage matrix
 
 Run all three live toggle workflows in parallel:
