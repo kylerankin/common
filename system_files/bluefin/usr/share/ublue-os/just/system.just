@@ -240,7 +240,6 @@ toggle-testing:
         else
             NEW_TAG="${IMAGE_TAG/-testing/}"
         fi
-        gum confirm "Switch from testing to ${NEW_TAG}?" || exit 0
     else
         case "${IMAGE_TAG}" in
             stable|latest) NEW_TAG="testing" ;;
@@ -250,8 +249,34 @@ toggle-testing:
                 echo "Cannot toggle testing from channel '${IMAGE_TAG}'."
                 exit 1 ;;
         esac
+    fi
+    # A dated testing tag (testing-YYYYMMDD-sha) has no "-testing" to strip, so
+    # NEW_TAG equals the current tag and switching to it is a no-op. Refuse with
+    # a clear message instead of switching to the same tag.
+    if [[ "${NEW_TAG}" == "${IMAGE_TAG}" ]]; then
+        echo "Current tag '${IMAGE_TAG}' has no second stream to toggle to; refusing."
+        exit 1
+    fi
+    if [[ "${IMAGE_TAG}" == *testing* ]]; then
+        gum confirm "Switch from testing to ${NEW_TAG}?" || exit 0
+    else
         echo "Testing images may be unstable and are not recommended for daily use."
         gum confirm "Switch to testing channel (${NEW_TAG})?" || exit 0
+    fi
+    # Testing-only images (e.g. Utah) publish no :stable, so the mapped target is
+    # absent and bootc would fail with a manifest error. When skopeo is available
+    # and can reach the registry, refuse on an absent target tag instead. skopeo
+    # and the network are optional: without them we cannot prove the tag is
+    # absent, so we fall back to the switch and let bootc report. The tag is
+    # matched as a JSON string element (surrounded by quotes) so a short tag never
+    # matches a longer one such as lts vs lts-testing.
+    if command -v skopeo >/dev/null 2>&1; then
+        if tag_list="$(skopeo list-tags "docker://${IMAGE_PATH}" 2>/dev/null)" \
+                && [[ -n "${tag_list}" ]] \
+                && [[ "${tag_list}" != *\"${NEW_TAG}\"* ]]; then
+            echo "Target tag '${NEW_TAG}' does not exist for ${IMAGE_PATH}; refusing to switch."
+            exit 1
+        fi
     fi
     pkexec bootc switch --enforce-container-sigpolicy "${IMAGE_PATH}:${NEW_TAG}"
 

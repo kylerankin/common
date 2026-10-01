@@ -72,6 +72,16 @@ exit 0
 MOCK
     done
 
+    # skopeo list-tags emits a JSON tag list from MOCK_TAGS (a JSON array body)
+    # and nothing otherwise, so the no-second-stream guard stays inert unless a
+    # test opts in by setting MOCK_TAGS.
+    _write_mock "skopeo" <<'MOCK'
+#!/bin/bash
+echo "skopeo $*" >> "${COMMAND_LOG}"
+[ "${1}" = "list-tags" ] && [ -n "${MOCK_TAGS:-}" ] && printf '{"Repository":"img","Tags":[%s]}\n' "${MOCK_TAGS}"
+exit 0
+MOCK
+
     # flatpak list emits the VM stack only when MOCK_VMS_INSTALLED=1.
     _write_mock "flatpak" <<'MOCK'
 #!/bin/bash
@@ -205,6 +215,39 @@ _run_recipe() {
     _write_image_info "stable" "ostree-image-signed:docker://ghcr.io/ublue-os/bluefin"
     _run_recipe "toggle-testing.sh"
     grep -q "^pkexec bootc switch" "${COMMAND_LOG}"
+}
+
+# --- toggle-testing: testing-only images (e.g. Utah) ---------------------
+
+@test "toggle-testing: a dated testing tag refuses instead of no-op switching" {
+    _write_image_info "testing-20260929-362ea44" "ostree-image-signed:docker://ghcr.io/ublue-os/utah"
+    _run_recipe "toggle-testing.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"no second stream to toggle to"* ]]
+    ! grep -q "bootc switch" "${COMMAND_LOG}"
+}
+
+@test "toggle-testing: bare testing refuses when the registry has no stable" {
+    _write_image_info "testing" "ostree-image-signed:docker://ghcr.io/ublue-os/utah"
+    _run_recipe "toggle-testing.sh" MOCK_TAGS='"testing","testing-20260929-362ea44"'
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"does not exist for ghcr.io/ublue-os/utah"* ]]
+    ! grep -q "bootc switch" "${COMMAND_LOG}"
+}
+
+@test "toggle-testing: bare testing switches when stable exists" {
+    _write_image_info "testing" "ostree-image-signed:docker://ghcr.io/ublue-os/bluefin"
+    _run_recipe "toggle-testing.sh" MOCK_TAGS='"stable","testing","latest"'
+    [ "$status" -eq 0 ]
+    grep -q "bluefin:stable$" "${COMMAND_LOG}"
+}
+
+@test "toggle-testing: refuses when the mapped testing tag is absent" {
+    _write_image_info "lts" "ostree-image-signed:docker://ghcr.io/ublue-os/utah-lts"
+    _run_recipe "toggle-testing.sh" MOCK_TAGS='"stable","latest"'
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"does not exist for ghcr.io/ublue-os/utah-lts"* ]]
+    ! grep -q "bootc switch" "${COMMAND_LOG}"
 }
 
 # --- toggle-vms ----------------------------------------------------------
