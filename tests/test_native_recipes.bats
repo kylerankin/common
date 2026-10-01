@@ -72,6 +72,14 @@ if [[ "$1" == "list" ]]; then
     printf '%s\n' "${MOCK_FLATPAK_LIST:-}"
 fi
 MOCK
+    # skopeo stays silent so the absent-target guard cannot prove a tag is
+    # missing and stays inert; this also keeps the suite off the network when a
+    # real skopeo is installed on the host.
+    cat > "${WORKDIR}/bin/skopeo" <<'MOCK'
+#!/bin/bash
+echo "skopeo $*" >> "${COMMAND_LOG}"
+exit 0
+MOCK
     cat > "${WORKDIR}/bin/gum" <<'MOCK'
 #!/bin/bash
 echo "gum $*" >> "${COMMAND_LOG}"

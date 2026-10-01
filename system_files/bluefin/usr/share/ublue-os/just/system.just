@@ -257,12 +257,6 @@ toggle-testing:
         echo "Current tag '${IMAGE_TAG}' has no second stream to toggle to; refusing."
         exit 1
     fi
-    if [[ "${IMAGE_TAG}" == *testing* ]]; then
-        gum confirm "Switch from testing to ${NEW_TAG}?" || exit 0
-    else
-        echo "Testing images may be unstable and are not recommended for daily use."
-        gum confirm "Switch to testing channel (${NEW_TAG})?" || exit 0
-    fi
     # Testing-only images (e.g. Utah) publish no :stable, so the mapped target is
     # absent and bootc would fail with a manifest error. When skopeo is available
     # and can reach the registry, refuse on an absent target tag instead. skopeo
@@ -277,6 +271,12 @@ toggle-testing:
             echo "Target tag '${NEW_TAG}' does not exist for ${IMAGE_PATH}; refusing to switch."
             exit 1
         fi
+    fi
+    if [[ "${IMAGE_TAG}" == *testing* ]]; then
+        gum confirm "Switch from testing to ${NEW_TAG}?" || exit 0
+    else
+        echo "Testing images may be unstable and are not recommended for daily use."
+        gum confirm "Switch to testing channel (${NEW_TAG})?" || exit 0
     fi
     pkexec bootc switch --enforce-container-sigpolicy "${IMAGE_PATH}:${NEW_TAG}"
 

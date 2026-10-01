@@ -73,7 +73,7 @@ MOCK
     done
 
     # skopeo list-tags emits a JSON tag list from MOCK_TAGS (a JSON array body)
-    # and nothing otherwise, so the no-second-stream guard stays inert unless a
+    # and nothing otherwise, so the absent-target guard stays inert unless a
     # test opts in by setting MOCK_TAGS.
     _write_mock "skopeo" <<'MOCK'
 #!/bin/bash
@@ -225,6 +225,7 @@ _run_recipe() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"no second stream to toggle to"* ]]
     ! grep -q "bootc switch" "${COMMAND_LOG}"
+    ! grep -q "gum confirm" "${COMMAND_LOG}"
 }
 
 @test "toggle-testing: bare testing refuses when the registry has no stable" {
@@ -233,6 +234,7 @@ _run_recipe() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"does not exist for ghcr.io/ublue-os/utah"* ]]
     ! grep -q "bootc switch" "${COMMAND_LOG}"
+    ! grep -q "gum confirm" "${COMMAND_LOG}"
 }
 
 @test "toggle-testing: bare testing switches when stable exists" {
@@ -248,6 +250,7 @@ _run_recipe() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"does not exist for ghcr.io/ublue-os/utah-lts"* ]]
     ! grep -q "bootc switch" "${COMMAND_LOG}"
+    ! grep -q "gum confirm" "${COMMAND_LOG}"
 }
 
 # --- toggle-vms ----------------------------------------------------------
