@@ -197,6 +197,9 @@ jobs:
       - name: Run bats (libvirt helper)
         run: bats tests/test_libvirt_helper.bats
 
+      - name: Run bats (pwquality)
+        run: bats tests/test_pwquality.bats
+
       - name: Run bats (shared.just)
         run: bats tests/test_shared_just.bats
 
