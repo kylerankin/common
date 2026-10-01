@@ -45,7 +45,7 @@ jobs:
           pip install pytest pytest-cov pyyaml jsonschema numpy
 
       - name: Install just
-        uses: taiki-e/install-action@b6a061addd82b81aaeca51bdf2c53cd707996e5a # just
+        uses: taiki-e/install-action@040e4337618138609b81ecabab828c7c133bae70 # just
         with:
           tool: just
 
@@ -98,6 +98,7 @@ jobs:
             coverage.xml
             coverage-html/
           retention-days: 7
+
       - name: Smoke-test brew bundle accepts preinstall Brewfile (real Homebrew)
         run: |
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
