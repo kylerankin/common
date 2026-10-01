@@ -78,11 +78,35 @@ _calls() {
 }
 
 # Run with a minimal self-contained PATH so a host rpm-ostree cannot leak in.
+# stderr is captured: the recipe has no `set -e`, so an unguarded rpm-ostree
+# call still exits 0 and only shows up as a "command not found" diagnostic.
 _run() {
     PATH="${WORKDIR}/bin" \
         CALLS="${WORKDIR}/calls.log" \
         GUM_EXITS="${WORKDIR}/gum-exits" \
-        /usr/bin/bash "${WORKDIR}/clean.sh"
+        /usr/bin/bash "${WORKDIR}/clean.sh" 2> "${WORKDIR}/stderr.log"
+}
+
+_stderr() {
+    cat "${WORKDIR}/stderr.log"
+}
+
+_clean_system_recipe() {
+    awk '
+        /^clean-system:/ { in_recipe=1; next }
+        in_recipe && $0 !~ /^    / && $0 !~ /^$/ { exit }
+        in_recipe && $0 ~ /^    / { print }
+    ' "${DEFAULT_JUST}"
+}
+
+@test "clean-system: guards the rpm-ostree cleanup with command -v" {
+    local recipe
+    recipe="$(_clean_system_recipe)"
+
+    run grep -Eq 'command -v rpm-ostree' <<< "${recipe}"
+    [ "${status}" -eq 0 ]
+    run grep -Eq '^[[:space:]]*rpm-ostree cleanup -bm' <<< "${recipe}"
+    [ "${status}" -eq 0 ]
 }
 
 @test "clean-system: skips rpm-ostree cleanup when the binary is absent (bootc)" {
@@ -91,10 +115,14 @@ _run() {
     _queue_gum_exits 0 0 0 0
 
     _run
-    local status=$?
+    local exit_code=$?
 
-    [ "${status}" -eq 0 ]
+    [ "${exit_code}" -eq 0 ]
     run grep -Fq "rpm-ostree cleanup" <<< "$(_calls)"
+    [ "${status}" -ne 0 ]
+    # Without the guard the recipe still exits 0 (no `set -e`), so the only
+    # runtime evidence of the bug is bash's diagnostic on stderr.
+    run grep -Fq "command not found" <<< "$(_stderr)"
     [ "${status}" -ne 0 ]
 }
 
@@ -113,9 +141,11 @@ _run() {
     _queue_gum_exits 0 0 0 0
 
     _run
-    local status=$?
+    local exit_code=$?
 
-    [ "${status}" -eq 0 ]
+    [ "${exit_code}" -eq 0 ]
     run grep -Fq "rpm-ostree cleanup -bm" <<< "$(_calls)"
     [ "${status}" -eq 0 ]
+    run grep -Fq "command not found" <<< "$(_stderr)"
+    [ "${status}" -ne 0 ]
 }
