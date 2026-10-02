@@ -18,6 +18,8 @@ _extract_script() {
         found && /^[^[:space:]]/ { exit }
         found { sub(/^    /, ""); print }
     ' "${SYSTEM_JUST}" > "${out_file}"
+    # Guard against a recipe rename silently producing an empty test subject.
+    [ -s "${out_file}" ]
 }
 
 _write_mock() {
