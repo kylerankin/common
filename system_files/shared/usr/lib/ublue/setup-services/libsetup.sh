@@ -17,6 +17,14 @@ SETUP_CHECKER_FILE="${SETUP_CHECKER_FILE:-$HOME/.local/share/ublue/setup_version
 # on the next boot instead of being permanently, silently skipped
 # (projectbluefin/common#1137).
 #
+# Note: check and commit take the lock independently, so the pair is NOT
+# mutually exclusive across processes — two concurrent runs of the same hook
+# with the same key can both pass the gate before either commits. Unlike
+# version-script, which checks and records under one lock, the split API only
+# guarantees that each individual read or write is atomic. hookrunner runs
+# hooks sequentially per service and the user/system/privileged keys differ, so
+# this does not happen in practice; keep it in mind for new callers.
+#
 # Legacy check-and-record, kept unchanged for existing callers (including
 # downstream images that ship this library):
 #   version-script tailscale user 1 || exit 0
@@ -100,7 +108,7 @@ function version-script-commit() {
 # Record ${VERSION} for ${TYPE_OF_SERVICE}.${TARGET_VERSIONING_NAME} in
 # $SETUP_CHECKER_FILE. Takes NO lock; callers must hold it. Returns non-zero
 # if the write fails.
-_write_version() {
+function _write_version() {
   local tmp
   tmp=$(mktemp)
   if jq ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\" = \"${VERSION}\"" "${SETUP_CHECKER_FILE}" > "${tmp}"; then
@@ -122,7 +130,7 @@ _write_version() {
 # malformed rather than silently skipping setup. Takes NO lock; callers that
 # also write must hold the lock themselves so the create/validate and the
 # read-modify-write are atomic together.
-_ensure_versioning_file() {
+function _ensure_versioning_file() {
   if [ ! -e "${SETUP_CHECKER_FILE}" ]; then
     mkdir -p "$(dirname "${SETUP_CHECKER_FILE}")"
     echo "{}" > "${SETUP_CHECKER_FILE}"
