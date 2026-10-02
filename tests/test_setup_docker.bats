@@ -55,6 +55,7 @@ MOCK
     _write_mock "gum" <<'MOCK'
 #!/bin/bash
 if [[ "$1" == "confirm" ]]; then
+    echo "gum confirm" >> "${COMMAND_LOG}"
     [[ "${MOCK_GUM_CONFIRM:-1}" == "1" ]] && exit 0 || exit 1
 fi
 MOCK
@@ -108,13 +109,14 @@ _run() {
     ! grep -qF "brew install" "${COMMAND_LOG}"
 }
 
-@test "setup-docker: aborts before installing when a rootful docker socket is writable" {
+@test "setup-docker: aborts before prompting when a rootful docker socket is writable" {
     local sock="${WORKDIR}/docker.sock"
     : > "${sock}"
     chmod 666 "${sock}"
     BLUEFIN_DOCKER_SOCKET="${sock}" _run
     [ "${status}" -eq 1 ]
     [[ "${output}" == *"rootful Docker daemon is running"* ]]
+    ! grep -qF "gum confirm" "${COMMAND_LOG}"
     ! grep -qF "brew install" "${COMMAND_LOG}"
     ! grep -qF "rootless-setuptool" "${COMMAND_LOG}"
 }
