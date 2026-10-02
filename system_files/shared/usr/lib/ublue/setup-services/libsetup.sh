@@ -51,7 +51,7 @@ function version-script() {
 
 # version-script-check <name> <type> <n>
 # Read-only gate: returns 1 if the hook already ran at this version, 0 if it
-# should run. Records nothing; pair it with version-script-commit.
+# should run. Records no version; pair it with version-script-commit.
 function version-script-check() {
   TARGET_VERSIONING_NAME=$1
   TYPE_OF_SERVICE=$2
@@ -128,19 +128,4 @@ _ensure_versioning_file() {
     echo "Warning: ${SETUP_CHECKER_FILE} is malformed; resetting."
     echo "{}" > "${SETUP_CHECKER_FILE}"
   fi
-}
-
-# _setup_versioning_file
-#
-# Locking wrapper around _ensure_versioning_file: takes an exclusive lock so
-# concurrent first-boot setup scripts cannot read the JSON before either has
-# written back. Used by version-script-check (the read gate), which only reads;
-# version-script-commit holds the same lock across create/validate and the
-# read-modify-write, so the two never interleave.
-_setup_versioning_file() {
-  local lock_file="${SETUP_CHECKER_FILE}.lock"
-  (
-    flock -x 200
-    _ensure_versioning_file
-  ) 200>"${lock_file}"
 }
