@@ -104,7 +104,11 @@ _write_version() {
   local tmp
   tmp=$(mktemp)
   if jq ".version.${TYPE_OF_SERVICE}.\"${TARGET_VERSIONING_NAME}\" = \"${VERSION}\"" "${SETUP_CHECKER_FILE}" > "${tmp}"; then
-    mv "${tmp}" "${SETUP_CHECKER_FILE}" || { rm -f "${tmp}"; return 1; }
+    mv "${tmp}" "${SETUP_CHECKER_FILE}" || {
+      rm -f "${tmp}"
+      echo "Error: failed to install version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"
+      return 1
+    }
   else
     rm -f "${tmp}"
     echo "Error: failed to write version update for ${TYPE_OF_SERVICE}-${TARGET_VERSIONING_NAME}"

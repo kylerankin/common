@@ -22,18 +22,29 @@ fi
 
 version-script-check asus system 1 || exit 0
 
-set -xe
+set -x
 
 echo "ASUS hardware detected, enabling system services..."
 
-systemctl enable --now asusd.service asus-shutdown.service
-udevadm control --reload
-udevadm trigger
+# asus-shutdown.service may be absent and `--now` fails if asusd cannot start,
+# so tolerate the failure here: udev still has to be reloaded, and only the
+# version commit is skipped so the hook retries on the next boot.
+setup_ok=1
+if ! systemctl enable --now asusd.service asus-shutdown.service; then
+    echo "asus-setup: failed to enable asusd.service/asus-shutdown.service, retrying next boot" >&2
+    setup_ok=0
+fi
+
+udevadm control --reload || setup_ok=0
+udevadm trigger || setup_ok=0
+
+if [[ "${setup_ok}" -eq 0 ]]; then
+    echo "asus-setup: setup incomplete, not recording the version"
+    exit 0
+fi
 
 echo "ASUS system setup complete"
 
-# Record success only after every step above succeeded. set -e aborts the hook
-# before this commit if the enable or the udevadm calls fail (for example a
-# masked asusd.service), so the hook retries next boot instead of being
-# permanently skipped (projectbluefin/common#1137).
+# Record success only after every step above succeeded, so a partial run retries
+# next boot instead of being permanently skipped (projectbluefin/common#1137).
 version-script-commit asus system 1

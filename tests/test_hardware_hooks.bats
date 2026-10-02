@@ -199,6 +199,36 @@ EOF
     [[ "${output}" == *"ASUS"* ]]
 }
 
+@test "11-asus: reloads udev and skips the version commit when enable fails" {
+    echo "ASUSTeK COMPUTER INC." > "${WORKDIR}/sys/devices/virtual/dmi/id/sys_vendor"
+    # asus-shutdown.service missing, or asusd failing to start, makes the
+    # enable fail: udev must still be reloaded and the version left unrecorded.
+    cat > "${WORKDIR}/bin/systemctl" << 'EOF'
+#!/bin/bash
+case "$*" in
+    "list-unit-files asusd.service") echo "asusd.service enabled"; exit 0 ;;
+    "enable --now asusd.service asus-shutdown.service") exit 1 ;;
+    *) exit 0 ;;
+esac
+EOF
+    chmod +x "${WORKDIR}/bin/systemctl"
+
+    run bash "${ASUS_HOOK}"
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"mock: udevadm control --reload"* ]]
+    [[ "${output}" == *"not recording the version"* ]]
+    run jq -r '.version.system.asus' "${SETUP_CHECKER_FILE}"
+    [ "${output}" != "1" ]
+}
+
+@test "11-asus: records the version after a successful run" {
+    echo "ASUSTeK COMPUTER INC." > "${WORKDIR}/sys/devices/virtual/dmi/id/sys_vendor"
+    run bash "${ASUS_HOOK}"
+    [ "${status}" -eq 0 ]
+    run jq -r '.version.system.asus' "${SETUP_CHECKER_FILE}"
+    [ "${output}" = "1" ]
+}
+
 @test "11-asus: skips when asusd.service not installed" {
     echo "ASUSTeK COMPUTER INC." > "${WORKDIR}/sys/devices/virtual/dmi/id/sys_vendor"
     # Override systemctl to report asusd.service not found
