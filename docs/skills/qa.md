@@ -119,7 +119,7 @@ first-boot setup script. New and migrated hooks use a gate/commit pair so a
 failed body is retried (projectbluefin/common#1137):
 
 - `version-script-check <name> <type> <n>` is a **read-only gate**. It tells
-  you whether the hook has already run at version `<n>`, but it writes nothing.
+  you whether the hook has already run at version `<n>`, but it records no version.
 - `version-script-commit <name> <type> <n>` **writes the stamp**. Call it at
   the end of the hook body, only on success, so a body that fails never records
   and retries next boot instead of being permanently skipped.

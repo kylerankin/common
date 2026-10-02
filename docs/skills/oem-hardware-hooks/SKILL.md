@@ -83,7 +83,7 @@ version-script-commit <name> <type> <version>
 
 **Critical when migrating:** use the **same** version number as the downstream hook. Bumping it re-runs the hook on every existing system on next boot.
 
-**`version-script-check` is a read-only gate that fires AFTER all preconditions pass** — it writes nothing. Call `version-script-commit` at the **end** of the hook body, after the work succeeds, to write the stamp. The legacy `version-script` records before the body runs and is kept only for existing downstream callers; do not use it in new hooks. See [`references/hook-patterns.md`](references/hook-patterns.md) for the canonical safe pattern and anti-pattern.
+**`version-script-check` is a read-only gate that fires AFTER all preconditions pass** — it records no version. Call `version-script-commit` at the **end** of the hook body, after the work succeeds, to write the stamp. The legacy `version-script` records before the body runs and is kept only for existing downstream callers; do not use it in new hooks. See [`references/hook-patterns.md`](references/hook-patterns.md) for the canonical safe pattern and anti-pattern.
 
 ---
 

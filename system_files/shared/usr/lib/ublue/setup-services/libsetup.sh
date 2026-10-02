@@ -51,7 +51,7 @@ function version-script() {
 
 # version-script-check <name> <type> <n>
 # Read-only gate: returns 1 if the hook already ran at this version, 0 if it
-# should run. Records nothing; pair it with version-script-commit.
+# should run. Records no version; pair it with version-script-commit.
 function version-script-check() {
   TARGET_VERSIONING_NAME=$1
   TYPE_OF_SERVICE=$2
