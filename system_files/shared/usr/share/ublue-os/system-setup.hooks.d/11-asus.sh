@@ -26,13 +26,25 @@ set -x
 
 echo "ASUS hardware detected, enabling system services..."
 
-# asus-shutdown.service may be absent and `--now` fails if asusd cannot start,
-# so tolerate the failure here: udev still has to be reloaded, and only the
-# version commit is skipped so the hook retries on the next boot.
+# Enable the units separately: only an asusd.service failure is transient (the
+# daemon may not be able to start yet), so udev still has to be reloaded and
+# only the version commit is skipped, making the hook retry on the next boot.
 setup_ok=1
-if ! systemctl enable --now asusd.service asus-shutdown.service; then
-    echo "asus-setup: failed to enable asusd.service/asus-shutdown.service, retrying next boot" >&2
+if ! systemctl enable --now asusd.service; then
+    echo "asus-setup: failed to enable asusd.service, retrying next boot" >&2
     setup_ok=0
+fi
+
+# asus-shutdown.service is optional and permanently absent on some images, so
+# a missing unit must not block the version commit — otherwise the hook would
+# reload udev and warn on every boot forever.
+if systemctl list-unit-files asus-shutdown.service &>/dev/null; then
+    if ! systemctl enable --now asus-shutdown.service; then
+        echo "asus-setup: failed to enable asus-shutdown.service, retrying next boot" >&2
+        setup_ok=0
+    fi
+else
+    echo "asus-setup: asus-shutdown.service not present, skipping it"
 fi
 
 udevadm control --reload || setup_ok=0
