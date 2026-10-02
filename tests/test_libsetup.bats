@@ -169,11 +169,10 @@ _source_lib() {
   [ "${status}" -eq 1 ]
 }
 
-# Regression guard for projectbluefin/common#1196: version-script-commit must
-# surface a write failure to the caller. A swallowed return (the subshell
-# returned 1 but the function fell through to an unconditional `return 0`)
-# meant a failed version stamp looked like success, so the hook would not
-# retry. The commit has to propagate the subshell's non-zero status.
+# version-script-commit must surface a write failure to the caller: if the
+# stamp fails but the function still returns 0, the failure looks like success
+# and the hook never retries. The status of the locking subshell has to
+# propagate out of the function.
 @test "version-script-commit returns non-zero when the write fails" {
   _source_lib
   # Point the versioning file at a directory so the write cannot succeed.
