@@ -26,12 +26,14 @@ set -xe
 
 echo "ASUS hardware detected, enabling system services..."
 
-systemctl enable --now asusd.service asus-shutdown.service || true
+systemctl enable --now asusd.service asus-shutdown.service
 udevadm control --reload
 udevadm trigger
 
 echo "ASUS system setup complete"
 
-# Record success only after the body ran, so a failing first-boot hook retries
-# next boot instead of being permanently skipped.
+# Record success only after every step above succeeded. set -e aborts the hook
+# before this commit if the enable or the udevadm calls fail (for example a
+# masked asusd.service), so the hook retries next boot instead of being
+# permanently skipped (projectbluefin/common#1137).
 version-script-commit asus system 1
