@@ -84,6 +84,14 @@ _source_lib() {
   [ "${status}" -eq 1 ]
 }
 
+@test "version-script-check logs why it skipped" {
+  _source_lib
+  version-script-commit my-service user 1
+  run version-script-check my-service user 1
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == *"Exiting as current version (1) for user-my-service"* ]]
+}
+
 @test "version-script-check returns 0 (runs) on version bump" {
   _source_lib
   version-script-commit my-service user 1
