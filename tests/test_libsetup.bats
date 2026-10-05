@@ -152,6 +152,8 @@ _source_lib() {
   [ -f "${SETUP_CHECKER_FILE}" ]
   val="$(jq -r '.version.user."my-service"' "${SETUP_CHECKER_FILE}")"
   [ "${val}" = "1" ]
+}
+
 # Regression guard for projectbluefin/common#1137: the gate says "run" (0) but
 # if the hook body fails it never calls version-script-commit, so the version
 # stays unrecorded and the hook retries next boot.
