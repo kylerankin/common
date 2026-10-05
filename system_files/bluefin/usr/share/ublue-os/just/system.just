@@ -507,4 +507,4 @@ setup-docker:
     gum style \
         --foreground 2 --border rounded --border-foreground 2 \
         --align center --width 60 --padding "1 3" \
-        "Docker is installed. Log out and back in to use it."
+        "Docker (rootless) is installed and active. Use it in this session."
