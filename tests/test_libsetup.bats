@@ -154,6 +154,17 @@ _source_lib() {
   [ "${val}" = "1" ]
 }
 
+@test "version-script-check and -commit create the versioning directory when missing" {
+  _source_lib
+  export SETUP_CHECKER_FILE="${WORKDIR}/does/not/exist/yet/setup_versioning.json"
+  run version-script-check my-service user 1
+  [ "${status}" -eq 0 ]
+  rm -rf "${WORKDIR}/does"
+  run version-script-commit my-service user 1
+  [ "${status}" -eq 0 ]
+  [ "$(jq -r '.version.user."my-service"' "${SETUP_CHECKER_FILE}")" = "1" ]
+}
+
 # Regression guard for projectbluefin/common#1137: the gate says "run" (0) but
 # if the hook body fails it never calls version-script-commit, so the version
 # stays unrecorded and the hook retries next boot.

@@ -77,6 +77,7 @@ function version-script-check() {
   # and the jq read. The atomic mv in _write_version prevents a torn read, but
   # holding the lock makes the check-and-return a single atomic step.
   local lock_file="${SETUP_CHECKER_FILE}.lock"
+  mkdir -p "$(dirname "${lock_file}")"
   (
     flock -x 200
     _ensure_versioning_file
@@ -102,6 +103,7 @@ function version-script-commit() {
   # clobber each other's stamp — a lost update would silently re-run the hook
   # on the next boot.
   local lock_file="${SETUP_CHECKER_FILE}.lock"
+  mkdir -p "$(dirname "${lock_file}")"
   (
     flock -x 200
 
@@ -148,30 +150,4 @@ function _ensure_versioning_file() {
     echo "Warning: ${SETUP_CHECKER_FILE} is malformed; resetting."
     echo "{}" > "${SETUP_CHECKER_FILE}"
   fi
-}
-
-# _setup_versioning_file
-#
-# Locking wrapper around _ensure_versioning_file: takes an exclusive lock so
-# concurrent first-boot setup scripts cannot read the JSON before either has
-# written back. Used by version-script-check (the read gate), which only reads;
-# version-script-commit holds the same lock across create/validate and the
-# read-modify-write, so the two never interleave.
-_setup_versioning_file() {
-  local lock_file="${SETUP_CHECKER_FILE}.lock"
-
-  # Ensure the lock file's parent directory exists before opening fd 200 on it.
-  # The redirection is evaluated before the subshell body runs, so a missing
-  # directory (e.g. /root/.local/share/ublue or
-  # /run/gdm/home/gnome-initial-setup-2/.local/share/ublue on first login) would
-  # fail the flock with "No such file or directory" and skip the hook silently.
-  mkdir -p "$(dirname "${lock_file}")"
-
-  # Run the check/write inside a subshell with an exclusive flock so that
-  # concurrent first-boot setup scripts (user-setup + privileged-setup) cannot
-  # read the JSON before either has written back, causing duplicate execution.
-  (
-    flock -x 200
-    _ensure_versioning_file
-  ) 200>"${lock_file}"
 }
