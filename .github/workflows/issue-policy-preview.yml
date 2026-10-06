@@ -14,7 +14,11 @@ on:
       runtime-ref:
         description: First-party Actions candidate ref for read-only preview; production uses v1
         type: string
-        default: v1
+        # Pinned to the same commit the reusable workflow file is pinned to
+        # (reusable-issue-policy-preview.yml@48a0112). The workflow file SHA pin
+        # only pins the caller; without this the executed issue-lifecycle code
+        # still floats on the mutable v1 tag (common#1389).
+        default: 48a0112c6293d00357eef0ef3a4ce2e54dbdd94a # v1
       caller-ref:
         description: Reviewed caller data commit; empty uses event revision
         type: string
@@ -39,7 +43,7 @@ jobs:
       pull-requests: read
     uses: projectbluefin/actions/.github/workflows/reusable-issue-policy-preview.yml@48a0112c6293d00357eef0ef3a4ce2e54dbdd94a # v1
     with:
-      runtime-ref: ${{ inputs['runtime-ref'] || 'v1' }}
+      runtime-ref: ${{ inputs['runtime-ref'] || '48a0112c6293d00357eef0ef3a4ce2e54dbdd94a' }} # v1
       caller-ref: ${{ inputs['caller-ref'] || github.event.pull_request.head.sha || github.sha }}
       issue: ${{ inputs.issue || '' }}
       migrate: ${{ github.event_name == 'pull_request' || inputs.migrate }}
