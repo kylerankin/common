@@ -219,15 +219,16 @@ def _load_fallback_module():
         "on: [push,\n  pull_request_target]\njobs:\n  j:\n    runs-on: x\n",
         # block sequence
         "on:\n  - push\n  - pull_request_target\njobs:\n  j:\n    runs-on: x\n",
+        # quoted on: key with mapping trigger
+        '"on":\n  pull_request_target:\n    types: [opened]\njobs:\n  j:\n    runs-on: x\n',
+        "'on':\n  pull_request_target:\n    types: [opened]\njobs:\n  j:\n    runs-on: x\n",
     ],
 )
-def test_fallback_parser_detects_pr_target_triggers(tmp_path: Path, workflow: str):
+def test_fallback_parser_detects_pr_target_triggers(workflow: str):
     """With PyYAML absent the fallback parser must flag pull_request_target whether
     it appears as a scalar, inline flow list, multi-line flow list, or block list."""
     module = _load_fallback_module()
     module.yaml = None  # force the fallback (non-PyYAML) parser
-    wf = tmp_path / "w.yml"
-    wf.write_text(workflow)
     assert module._has_pr_target_in_on(workflow.splitlines()) is True
 
 
@@ -238,9 +239,12 @@ def test_fallback_parser_detects_pr_target_triggers(tmp_path: Path, workflow: st
         "on: [push,\n  pull_request]\njobs:\n  j:\n    runs-on: x\n",
         "on:\n  - push\n  - pull_request\njobs:\n  j:\n    runs-on: x\n",
         "jobs:\n  j:\n    runs-on: x\n    steps:\n      - uses: a/b@v1 # pull_request_target\n",
+        # token only in a comment inside the on: block
+        "on:\n  pull_request:  # not pull_request_target\njobs:\n  j:\n    runs-on: x\n",
+        "on:\n  # pull_request_target\n  - push\njobs:\n  j:\n    runs-on: x\n",
     ],
 )
-def test_fallback_parser_allows_non_pr_target(tmp_path: Path, workflow: str):
+def test_fallback_parser_allows_non_pr_target(workflow: str):
     """The fallback parser must not flag pull_request, and must ignore the token in
     comments or out of the on: context."""
     module = _load_fallback_module()

@@ -57,24 +57,25 @@ def _has_pr_target_in_on(lines: List[str]) -> bool:
     (``on:\n  - pull_request_target``). Flow lists can span multiple lines, so a
     per-line match misses the token when it sits before the closing ``]`` or on
     its own list-item line. Instead this captures the whole top-level on: block
-    and searches it for the trigger token.
+    (including the quoted ``"on":`` key form) and searches it, minus comments,
+    for the trigger token.
     """
+    on_key = re.compile(r"""^["']?on["']?\s*:""")
+    token = re.compile(r"\bpull_request_target\b")
     in_on = False
-    for line in lines:
-        if re.match(r"^on\s*:", line):
-            if re.search(r"\bpull_request_target\b", line):
+    for raw in lines:
+        # Drop YAML comments so the token inside a comment is not a match.
+        line = re.sub(r"(^|\s)#.*", "", raw)
+        if on_key.match(line):
+            if token.search(line):
                 return True
             in_on = True
             continue
         if in_on:
-            # A new top-level key (no indentation, not a comment) ends the block.
-            if re.match(r"^[^#\s]", line):
+            # A new top-level key (no indentation) ends the block.
+            if re.match(r"^\S", line):
                 in_on = False
-                if re.match(r"^on\s*:", line) and re.search(
-                    r"\bpull_request_target\b", line
-                ):
-                    return True
-            elif re.search(r"\bpull_request_target\b", line):
+            elif token.search(line):
                 return True
     return False
 
