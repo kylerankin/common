@@ -49,6 +49,36 @@ class SecurityIssue:
         return f"{self.severity}: [{loc}] {self.message}"
 
 
+def _has_pr_target_in_on(lines: List[str]) -> bool:
+    """Fallback pull_request_target detection used when PyYAML is unavailable.
+
+    The on: value may be a scalar (``on: pull_request_target``), an inline flow
+    list (``on: [push, pull_request_target]``), or a block sequence
+    (``on:\n  - pull_request_target``). Flow lists can span multiple lines, so a
+    per-line match misses the token when it sits before the closing ``]`` or on
+    its own list-item line. Instead this captures the whole top-level on: block
+    and searches it for the trigger token.
+    """
+    in_on = False
+    for line in lines:
+        if re.match(r"^on\s*:", line):
+            if re.search(r"\bpull_request_target\b", line):
+                return True
+            in_on = True
+            continue
+        if in_on:
+            # A new top-level key (no indentation, not a comment) ends the block.
+            if re.match(r"^[^#\s]", line):
+                in_on = False
+                if re.match(r"^on\s*:", line) and re.search(
+                    r"\bpull_request_target\b", line
+                ):
+                    return True
+            elif re.search(r"\bpull_request_target\b", line):
+                return True
+    return False
+
+
 def check_workflow_file(path: Path) -> List[SecurityIssue]:
     issues: List[SecurityIssue] = []
     content = path.read_text(encoding="utf-8")
@@ -187,10 +217,7 @@ def check_workflow_file(path: Path) -> List[SecurityIssue]:
         elif isinstance(on_trigger, dict) and "pull_request_target" in on_trigger:
             is_pr_target = True
     else:
-        for line in lines:
-            if re.search(r"^\s*(?:on:\s*)?pull_request_target(?:\s*:|$)", line):
-                is_pr_target = True
-                break
+        is_pr_target = _has_pr_target_in_on(lines)
 
     if is_pr_target:
         for i, line in enumerate(lines, 1):

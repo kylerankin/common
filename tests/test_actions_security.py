@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import importlib.util
 from pathlib import Path
 import pytest
 
@@ -195,3 +196,101 @@ jobs:
     )
     assert result.returncode != 0
     assert "forbidden" in result.stdout.lower() or "violates" in result.stdout.lower()
+
+
+def _load_fallback_module():
+    """Import the scanner as a module so the fallback parser can be exercised."""
+    spec = importlib.util.spec_from_file_location(
+        "check_actions_security_fallback", SCRIPT
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        # scalar trigger
+        "on: pull_request_target\njobs:\n  j:\n    runs-on: x\n",
+        # inline flow list
+        "on: [push, pull_request_target]\njobs:\n  j:\n    runs-on: x\n",
+        # multi-line flow list -- the gap reported in #1436
+        "on: [push,\n  pull_request_target]\njobs:\n  j:\n    runs-on: x\n",
+        # block sequence
+        "on:\n  - push\n  - pull_request_target\njobs:\n  j:\n    runs-on: x\n",
+    ],
+)
+def test_fallback_parser_detects_pr_target_triggers(tmp_path: Path, workflow: str):
+    """With PyYAML absent the fallback parser must flag pull_request_target whether
+    it appears as a scalar, inline flow list, multi-line flow list, or block list."""
+    module = _load_fallback_module()
+    module.yaml = None  # force the fallback (non-PyYAML) parser
+    wf = tmp_path / "w.yml"
+    wf.write_text(workflow)
+    assert module._has_pr_target_in_on(workflow.splitlines()) is True
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        "on: [push, pull_request]\njobs:\n  j:\n    runs-on: x\n",
+        "on: [push,\n  pull_request]\njobs:\n  j:\n    runs-on: x\n",
+        "on:\n  - push\n  - pull_request\njobs:\n  j:\n    runs-on: x\n",
+        "jobs:\n  j:\n    runs-on: x\n    steps:\n      - uses: a/b@v1 # pull_request_target\n",
+    ],
+)
+def test_fallback_parser_allows_non_pr_target(tmp_path: Path, workflow: str):
+    """The fallback parser must not flag pull_request, and must ignore the token in
+    comments or out of the on: context."""
+    module = _load_fallback_module()
+    module.yaml = None
+    assert module._has_pr_target_in_on(workflow.splitlines()) is False
+
+
+def test_fallback_multiline_flow_list_flags_untrusted_checkout(tmp_path: Path):
+    """End-to-end: a multi-line flow-list on: with pull_request_target plus an
+    untrusted checkout must be flagged even when PyYAML is absent."""
+    module = _load_fallback_module()
+    module.yaml = None
+    wf = tmp_path / "dangerous-multiline.yml"
+    wf.write_text("""
+name: PR Target Workflow
+on: [push,
+  pull_request_target]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.head_ref }}
+""")
+    issues = module.check_workflow_file(wf)
+    messages = "\n".join(str(i) for i in issues)
+    assert "Dangerous untrusted PR checkout detected" in messages, messages
+
+
+def test_fallback_multiline_flow_list_without_pr_target_allows_checkout(tmp_path: Path):
+    """A multi-line flow list that only lists pull_request must not be treated as a
+    privileged context, so a head_ref checkout stays allowed."""
+    module = _load_fallback_module()
+    module.yaml = None
+    wf = tmp_path / "plain-multiline.yml"
+    wf.write_text("""
+name: PR Workflow
+on: [push,
+  pull_request]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.head_ref }}
+""")
+    issues = module.check_workflow_file(wf)
+    messages = "\n".join(str(i) for i in issues)
+    assert "Dangerous untrusted PR checkout detected" not in messages, messages
