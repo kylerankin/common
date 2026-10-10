@@ -144,7 +144,7 @@ version-script-commit my-service user 1             # record success, after the 
 
 **State file:** `~/.local/share/ublue/setup_versioning.json` (user-scoped, not global).
 
-**Test coverage:** `tests/test_libsetup.bats` — 17 tests. Run `just test` to verify.
+**Test coverage:** `tests/test_libsetup.bats`. Run `just test` to verify.
 
 ## hookrunner.sh — setup hook dispatch
 

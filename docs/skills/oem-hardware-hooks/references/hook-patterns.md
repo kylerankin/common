@@ -8,8 +8,8 @@ Part of [oem-hardware-hooks](../SKILL.md) — version-script safe/anti-patterns;
 
 ### Canonical safe pattern (from `11-asus.sh` and `20-oem-brew.sh`)
 
-`version-script-check` is a **read-only gate** — it tells you whether the hook
-has already run at this version, but it writes nothing. `version-script-commit`
+`version-script-check` is a **gate that records no version** — it tells you whether the hook
+has already run at this version. `version-script-commit`
 **writes the stamp**, and it is only reached if the hook body got there
 without failing. Split the two so a failing body never records and retries
 next boot (this is projectbluefin/common#1137). The legacy `version-script`
