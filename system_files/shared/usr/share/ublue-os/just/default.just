@@ -31,7 +31,7 @@ clean-system:
     # default `podman image ls` table already carries the same columns, so the
     # placeholder buys nothing. Rationale + gate: tests/test_justfile_syntax.bats
     # and docs/skills/e2e-ci/SKILL.md.
-    if gum confirm "Prune all Podman images and volumes?"; then
+    if gum confirm "Prune unused (dangling) Podman images and volumes?"; then
         echo "Images that would be pruned:"
         /usr/bin/podman image ls --filter dangling=true 2>/dev/null | head -20
         echo "Volumes that would be pruned:"
@@ -46,7 +46,7 @@ clean-system:
     fi
 
     if command -v docker >/dev/null 2>&1; then
-      if gum confirm "Prune all Docker images and volumes?"; then
+      if gum confirm "Prune unused (dangling) Docker images and volumes?"; then
         echo "Images that would be pruned:"
         docker image ls --filter dangling=true 2>/dev/null | head -20
         echo "Volumes that would be pruned:"
