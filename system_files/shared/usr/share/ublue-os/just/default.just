@@ -33,9 +33,9 @@ clean-system:
     # and docs/skills/e2e-ci/SKILL.md.
     if gum confirm "Prune unused (dangling) Podman images and volumes?"; then
         echo "Images that would be pruned:"
-        /usr/bin/podman image ls --filter dangling=true 2>/dev/null | head -20
+        /usr/bin/podman image ls --filter dangling=true 2>/dev/null
         echo "Volumes that would be pruned:"
-        /usr/bin/podman volume ls --filter dangling=true --quiet 2>/dev/null | head -20
+        /usr/bin/podman volume ls --filter dangling=true --quiet 2>/dev/null
         if gum confirm "Proceed with pruning Podman images and volumes?"; then
             # prune -f, not -af: the preview above lists dangling images only,
             # so prune the same set. -af would also delete named images pulled on
@@ -48,9 +48,9 @@ clean-system:
     if command -v docker >/dev/null 2>&1; then
       if gum confirm "Prune unused (dangling) Docker images and volumes?"; then
         echo "Images that would be pruned:"
-        docker image ls --filter dangling=true 2>/dev/null | head -20
+        docker image ls --filter dangling=true 2>/dev/null
         echo "Volumes that would be pruned:"
-        docker volume ls --filter dangling=true --quiet 2>/dev/null | head -20
+        docker volume ls --filter dangling=true --quiet 2>/dev/null
         if gum confirm "Proceed with pruning Docker images and volumes?"; then
             # prune -f, not -af: the preview above lists dangling images only,
             # so prune the same set. -af would also delete named images pulled on

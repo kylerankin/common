@@ -51,8 +51,22 @@ setup() {
 #!/bin/bash
 echo "podman \$*" >> "\${PODMAN_CALLS}"
 case "\$1 \$2" in
-    "image ls") echo "example.com/base:latest  abc123" ; exit 0 ;;
-    "volume ls") echo "dangling-volume" ; exit 0 ;;
+    "image ls")
+        if [[ "\${MOCK_MANY_CANDIDATES:-0}" == "1" ]]; then
+            for i in {1..21}; do echo "podman-image-\${i}"; done
+        else
+            echo "example.com/base:latest  abc123"
+        fi
+        exit 0
+        ;;
+    "volume ls")
+        if [[ "\${MOCK_MANY_CANDIDATES:-0}" == "1" ]]; then
+            for i in {1..21}; do echo "podman-volume-\${i}"; done
+        else
+            echo "dangling-volume"
+        fi
+        exit 0
+        ;;
     *) exit 0 ;;
 esac
 EOF
@@ -64,8 +78,22 @@ EOF
 #!/bin/bash
 echo "docker \$*" >> "\${DOCKER_CALLS}"
 case "\$1 \$2" in
-    "image ls") echo "example.com/base:latest  abc123" ; exit 0 ;;
-    "volume ls") echo "dangling-volume" ; exit 0 ;;
+    "image ls")
+        if [[ "\${MOCK_MANY_CANDIDATES:-0}" == "1" ]]; then
+            for i in {1..21}; do echo "docker-image-\${i}"; done
+        else
+            echo "example.com/base:latest  abc123"
+        fi
+        exit 0
+        ;;
+    "volume ls")
+        if [[ "\${MOCK_MANY_CANDIDATES:-0}" == "1" ]]; then
+            for i in {1..21}; do echo "docker-volume-\${i}"; done
+        else
+            echo "dangling-volume"
+        fi
+        exit 0
+        ;;
     *) exit 0 ;;
 esac
 EOF
@@ -114,4 +142,14 @@ teardown() {
     local prune_flags
     prune_flags="$(grep 'podman image prune' "${PODMAN_CALLS}" | grep -o -- '-[a-f]*' | head -1)"
     [ "${prune_flags}" = "-f" ]
+}
+
+@test "clean-system: previews candidates beyond the old 20-row limit" {
+    export MOCK_MANY_CANDIDATES=1
+    run bash "${WORKDIR}/clean-system.sh"
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"podman-image-21"* ]]
+    [[ "${output}" == *"podman-volume-21"* ]]
+    [[ "${output}" == *"docker-image-21"* ]]
+    [[ "${output}" == *"docker-volume-21"* ]]
 }
