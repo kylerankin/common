@@ -114,7 +114,7 @@ MOCK
 #!/bin/bash
 echo "bootc $*" >> "${COMMAND_LOG}"
 if [[ "${MOCK_BOOTC_STATUS:-0}" != "0" ]]; then
-    echo "mock bootc upgrade failure" >&2
+    printf '%s\n' "${MOCK_BOOTC_OUTPUT:-mock bootc upgrade failure}" >&2
 fi
 exit "${MOCK_BOOTC_STATUS:-0}"
 MOCK
@@ -171,6 +171,7 @@ _run() {
         COMMAND_LOG="${COMMAND_LOG}" \
         SYSTEMD_STATE="${SYSTEMD_STATE}" \
         MOCK_BOOTC_STATUS="${MOCK_BOOTC_STATUS:-0}" \
+        MOCK_BOOTC_OUTPUT="${MOCK_BOOTC_OUTPUT:-}" \
         MOCK_HAS_UUPD_TIMER="${MOCK_HAS_UUPD_TIMER:-0}" \
         MOCK_ACTIVE_SERVICE="${MOCK_ACTIVE_SERVICE:-}" \
         MOCK_ENABLED_TIMER="${MOCK_ENABLED_TIMER:-}" \
@@ -219,6 +220,40 @@ MOCK
     [ "${status}" -eq 42 ]
     [[ "${output}" == *"mock bootc upgrade failure"* ]]
     run ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
+}
+
+# projectbluefin/common#1417: on composefs, "up to date" is reported by refusing
+# to upgrade with a non-zero exit and a "same fs-verity digest" message. That
+# refusal is not a failure: the update must continue, and a later real failure
+# must still be reported.
+@test "update: treats composefs up-to-date refusal as success and still updates flatpaks" {
+    _write_mock "brew" <<'MOCK'
+#!/bin/bash
+echo "brew $*" >> "${COMMAND_LOG}"
+MOCK
+    MOCK_BOOTC_STATUS=1 \
+        MOCK_BOOTC_OUTPUT='error: Upgrading composefs: Target image has the same fs-verity digest as the existing Some(Booted) deployment.' \
+        MOCK_FLATPAK_REMOTES=$'system\nuser' MOCK_BREW_BIN="${MOCKDIR}/brew" _run "${UPDATE_SCRIPT}"
+    [ "${status}" -eq 0 ]
+    grep -qF "sudo bootc upgrade" "${COMMAND_LOG}"
+    grep -qF "flatpak update -y" "${COMMAND_LOG}"
+    grep -qFx "brew upgrade" "${COMMAND_LOG}"
+}
+
+@test "update: treats staged composefs refusal as success" {
+    MOCK_BOOTC_STATUS=1 \
+        MOCK_BOOTC_OUTPUT='error: Upgrading composefs: Target image has the same fs-verity digest as the existing Some(Staged) deployment.' \
+        _run "${UPDATE_SCRIPT}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "update: a composefs refusal with a different error still fails" {
+    MOCK_BOOTC_STATUS=1 \
+        MOCK_BOOTC_OUTPUT='error: failed to fetch remote: network unreachable' \
+        _run "${UPDATE_SCRIPT}"
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"network unreachable"* ]]
+    ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
 }
 
 @test "update: updates both flatpak scopes and user-owned brew after bootc succeeds" {
