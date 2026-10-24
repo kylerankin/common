@@ -78,7 +78,7 @@ and retain real Homebrew validation in CI.
 
 ## Registry checks must handle socket timeouts
 
-`scripts/check-oci-refs.py` applies a 30-second per-request socket timeout.
+`scripts/check-oci-refs.py` applies a per-request socket timeout (`REQUEST_TIMEOUT_SECONDS`).
 Both opening a connection and reading its response can time out; catch
 `URLError` and `TimeoutError` inside the existing retry loop. Exhausted
 transient retries return unknown (`None`), not missing (`False`); HTTP 401
