@@ -214,13 +214,13 @@ user-scope artifacts are first-user-wins.
 | `/usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg` | upstream, verbatim |
 | `/usr/share/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg` | upstream, verbatim |
 
-All three are vendored from ChairLift v26.09.0-alpha.2 (GPL-3.0,
+All three are vendored from ChairLift v26.10.5 (GPL-3.0,
 `projectbluefin/chairlift`) and must be refreshed from the tag the cask pins
 whenever it is bumped. The two icons are byte-identical to upstream, so the
 claim is checkable:
 
 ```bash
-BASE=https://raw.githubusercontent.com/projectbluefin/chairlift/v26.09.0-alpha.2/data/icons/hicolor
+BASE=https://raw.githubusercontent.com/projectbluefin/chairlift/v26.10.5/data/icons/hicolor
 cd system_files/shared/usr/share/icons/hicolor
 for icon in scalable/apps/io.projectbluefin.chairlift.svg \
             symbolic/apps/io.projectbluefin.chairlift-symbolic.svg; do
