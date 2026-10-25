@@ -195,6 +195,35 @@ curl -s https://raw.githubusercontent.com/containers/storage/main/drivers/overla
   | grep -n "redirectDiffIfAdditionalLayer\|DiffGetter" | head -5
 ```
 
+### Known behaviour: composefs `bootc upgrade` exits 1 when already current
+
+**Referenced by `projectbluefin/common#1417`.** On composefs images (e.g.
+Dakota), `bootc upgrade` exits non-zero when the newest image is already booted
+or staged, reporting:
+
+```
+error: Upgrading composefs: Target image has the same fs-verity digest as the
+existing Some(Booted) deployment.
+```
+(`Some(Staged)` when the image is staged but not yet booted.) This is not a
+failure — the system is current.
+
+The `ujust update` recipe (`system_files/shared/usr/share/ublue-os/just/update.just`)
+now treats that exact refusal — matched by the string `same fs-verity digest` —
+as success while any other failure keeps its exit code, and streams the updater's
+output live instead of buffering it. The privileged `bootc-update-stage` helper
+(`system_files/shared/usr/libexec/bootc-update-stage`), which is the caller
+Control Center's "Check for updates" button runs and the actual subject of #1417,
+does **not** yet apply this handling: it still runs plain `bootc upgrade` under its
+pinned exact-argv contract. ChairLift masks the symptom in the UI by skipping the
+helper when the registry reports nothing newer (frostyard/chairlift#513), so the
+helper needs the same refusal handling as a follow-up.
+
+**Do not** convert this into a `bootc switch` / `--download-only` workaround:
+those change the staged-deployment semantics that ChairLift and uupd rely on.
+This is documented behaviour, not the `#1332` readlink bug — keep the two
+sections apart.
+
 ---
 
 ## What NOT to do

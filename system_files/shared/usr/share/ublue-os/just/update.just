@@ -23,12 +23,18 @@ update:
     # bootc upgrade is documented as idempotent, but on composefs it exits 1 when
     # the newest image is already booted or staged ("same fs-verity digest"). Treat
     # that specific refusal as success; any other failure keeps its exit status.
-    upgrade_status=0
-    upgrade_output="$(sudo bootc upgrade 2>&1)" || upgrade_status=$?
-    if [[ "${upgrade_status}" -ne 0 ]] \
-        && ! printf '%s\n' "${upgrade_output}" | grep -qi "same fs-verity digest"; then
-        echo "${upgrade_output}" >&2
-        exit "${upgrade_status}"
+    # Stream the updater's output live (tee) instead of buffering it, so the user
+    # still sees layer-download progress and bootc's final result (review #1545).
+    upgrade_log="$(mktemp)"
+    trap 'rm -f "${upgrade_log}"' EXIT
+    sudo bootc upgrade 2>&1 | tee "${upgrade_log}"
+    upgrade_status=${PIPESTATUS[0]}
+    if [[ "${upgrade_status}" -ne 0 ]]; then
+        if grep -qi "same fs-verity digest" "${upgrade_log}"; then
+            echo "System image is already up to date."
+        else
+            exit "${upgrade_status}"
+        fi
     fi
     # Updates system Flatpaks
     if flatpak remotes | grep -q system; then
