@@ -113,10 +113,15 @@ MOCK
     _write_mock "bootc" <<'MOCK'
 #!/bin/bash
 echo "bootc $*" >> "${COMMAND_LOG}"
-if [[ "${MOCK_BOOTC_STATUS:-0}" != "0" ]]; then
-    printf '%s\n' "${MOCK_BOOTC_OUTPUT:-mock bootc upgrade failure}" >&2
+# Only the real `bootc upgrade` verb reports the composefs refusal; an invalid
+# subcommand (e.g. a bare `--check`) is a clap usage error, like real bootc.
+if [[ "${1:-}" == "upgrade" ]]; then
+    if [[ "${MOCK_BOOTC_STATUS:-0}" != "0" ]]; then
+        printf '%s\n' "${MOCK_BOOTC_OUTPUT:-mock bootc upgrade failure}" >&2
+    fi
+    exit "${MOCK_BOOTC_STATUS:-0}"
 fi
-exit "${MOCK_BOOTC_STATUS:-0}"
+exit 2
 MOCK
 
     # An installed copy must never take over the native recipes.
@@ -236,6 +241,7 @@ MOCK
         MOCK_FLATPAK_REMOTES=$'system\nuser' MOCK_BREW_BIN="${MOCKDIR}/brew" _run "${UPDATE_SCRIPT}"
     [ "${status}" -eq 0 ]
     grep -qF "sudo bootc upgrade" "${COMMAND_LOG}"
+    grep -qFx "sudo bootc upgrade --check" "${COMMAND_LOG}"
     grep -qF "flatpak update -y" "${COMMAND_LOG}"
     grep -qFx "brew upgrade" "${COMMAND_LOG}"
 }
@@ -452,9 +458,13 @@ PY
                     tail="${tail%%]*}"
                     tail="${tail%%#*}"
                     # Any whitespace-separated token starting with "--" is a
-                    # bootc flag; that is the regression we are guarding.
+                    # bootc flag; that is the regression we are guarding. The
+                    # read-only `--check` re-check on failure is allowed
+                    # explicitly (review #1545): it keeps the bare `upgrade`
+                    # verb and only reads the refusal text.
                     for tok in ${tail}; do
                         case "${tok}" in
+                            --check) ;;
                             --*)
                                 echo "REJECTED flag '${tok}' in: '${line}'" >&2
                                 bad=1

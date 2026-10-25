@@ -28,8 +28,9 @@ update:
     upgrade_status=0
     sudo bootc upgrade || upgrade_status=$?
     if [[ "${upgrade_status}" -ne 0 ]]; then
-        bootc_check=(--check)
-        if sudo bootc "${bootc_check[@]}" 2>&1 | grep -qF "Target image has the same fs-verity digest as the existing"; then
+        # Read-only re-check: keep the bare `upgrade` verb so bootc accepts it,
+        # and only read the refusal text on failure (review #1545).
+        if sudo bootc upgrade --check 2>&1 | grep -qF "Target image has the same fs-verity digest as the existing"; then
             echo "System image is already up to date."
         else
             exit "${upgrade_status}"
