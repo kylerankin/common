@@ -34,22 +34,25 @@ teardown() {
     [ "$output" = "USER=[REDACTED] contacted [REDACTED-email]" ]
 }
 
-@test "bug routing maps Bluefin-family, Dakota-family, and unknown images" {
+@test "bug routing maps Dakota-family and unknown images, Bluefin-family falls through" {
+    # Bluefin and Bluefin LTS destinations are archived, so every Bluefin-family
+    # image falls through to the caller default (projectbluefin/common for
+    # reports) instead of a distinct repo (common#1499).
     run bash -c 'source "$1"; IMAGE_NAME="$2"; IMAGE_TAG="$3"; route_issue_repo; printf "%s" "$BUG_REPO"' _ \
         "$BONEDIGGER_SCRIPT" bluefin latest
-    [ "$output" = "projectbluefin/bluefin" ]
+    [ "$output" = "projectbluefin/common" ]
 
     run bash -c 'source "$1"; IMAGE_NAME="$2"; IMAGE_TAG="$3"; route_issue_repo; printf "%s" "$BUG_REPO"' _ \
         "$BONEDIGGER_SCRIPT" bluefin lts-42
-    [ "$output" = "projectbluefin/bluefin-lts" ]
+    [ "$output" = "projectbluefin/common" ]
 
     run bash -c 'source "$1"; IMAGE_NAME="$2"; IMAGE_TAG="$3"; route_issue_repo; printf "%s" "$BUG_REPO"' _ \
         "$BONEDIGGER_SCRIPT" bluefin-lts-hwe stable
-    [ "$output" = "projectbluefin/bluefin-lts" ]
+    [ "$output" = "projectbluefin/common" ]
 
     run bash -c 'source "$1"; IMAGE_NAME="$2"; IMAGE_TAG="$3"; route_issue_repo; printf "%s" "$BUG_REPO"' _ \
         "$BONEDIGGER_SCRIPT" bluefin-nvidia stable
-    [ "$output" = "projectbluefin/bluefin" ]
+    [ "$output" = "projectbluefin/common" ]
 
     run bash -c 'source "$1"; IMAGE_NAME="$2"; IMAGE_TAG="$3"; route_issue_repo; printf "%s" "$BUG_REPO"' _ \
         "$BONEDIGGER_SCRIPT" dakota latest
@@ -743,12 +746,12 @@ EOF
 @test "confirmation accepts a positive issue number for the routed repository" {
     run bash -c '
         source "$1"
-        parse_confirm_target "$2" projectbluefin/bluefin-lts
+        parse_confirm_target "$2" projectbluefin/common
         printf "%s|%s" "$CONFIRM_REPO" "$CONFIRM_ISSUE"
     ' _ "$BONEDIGGER_SCRIPT" 73
 
     [ "$status" -eq 0 ]
-    [ "$output" = "projectbluefin/bluefin-lts|73" ]
+    [ "$output" = "projectbluefin/common|73" ]
 }
 
 @test "declining submission preserves the draft and resume command" {
