@@ -199,19 +199,23 @@ curl -s https://raw.githubusercontent.com/containers/storage/main/drivers/overla
 
 **Referenced by `projectbluefin/common#1417`.** On composefs images (e.g.
 Dakota), `bootc upgrade` exits non-zero when the newest image is already booted
-or staged, reporting:
+or staged, reporting (observed text abbreviated — #1417 shows the full line
+beginning "Performing Upgrade Operation:"):
 
 ```
 error: Upgrading composefs: Target image has the same fs-verity digest as the
 existing Some(Booted) deployment.
 ```
 (`Some(Staged)` when the image is staged but not yet booted.) This is not a
-failure — the system is current.
+failure — the system is current. The stable part matched by the recipe is the
+substring `Target image has the same fs-verity digest as the existing`.
 
 The `ujust update` recipe (`system_files/shared/usr/share/ublue-os/just/update.just`)
-now treats that exact refusal — matched by the string `same fs-verity digest` —
-as success while any other failure keeps its exit code, and streams the updater's
-output live instead of buffering it. The privileged `bootc-update-stage` helper
+now treats that exact refusal — matched by the full substring `Target image has
+the same fs-verity digest as the existing` — as success while any other failure
+keeps its exit code. bootc is kept attached to the terminal so its progress bars
+survive; on a non-zero exit the recipe only re-runs `bootc upgrade --check` to
+read the refusal text, rather than buffering the real run through a pipe. The privileged `bootc-update-stage` helper
 (`system_files/shared/usr/libexec/bootc-update-stage`), which is the caller
 Control Center's "Check for updates" button runs and the actual subject of #1417,
 does **not** yet apply this handling: it still runs plain `bootc upgrade` under its

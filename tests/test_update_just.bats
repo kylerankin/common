@@ -253,7 +253,7 @@ MOCK
         _run "${UPDATE_SCRIPT}"
     [ "${status}" -eq 1 ]
     [[ "${output}" == *"network unreachable"* ]]
-    ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
+    run ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
 }
 
 @test "update: updates both flatpak scopes and user-owned brew after bootc succeeds" {
