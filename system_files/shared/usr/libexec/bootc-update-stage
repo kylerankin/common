@@ -32,4 +32,21 @@ set -euo pipefail
 # merges this process's stdout and stderr and streams each line into its
 # progress view, so `--quiet` would leave the user staring at an empty
 # dialog for the length of an image pull.
-exec /usr/bin/bootc upgrade
+#
+# On composefs (e.g. Dakota) `bootc upgrade` exits non-zero when the newest
+# image is already booted or staged — "Target image has the same fs-verity
+# digest as the existing ... deployment". That means the system is current,
+# not broken, so treat only that refusal as success; any other failure keeps
+# its original exit code (projectbluefin/common#1417).
+if ! /usr/bin/bootc upgrade; then
+    # `--check` is a fast, read-only registry probe (not a multi-gigabyte
+    # pull), so reading its output is fine here. `|| true` keeps `set -e`/
+    # `pipefail` from tripping on the expected non-zero exit.
+    check_output="$(/usr/bin/bootc upgrade --check 2>&1 || true)"
+    if printf '%s\n' "$check_output" \
+            | grep -qF "Target image has the same fs-verity digest as the existing"; then
+        echo "System image is already up to date."
+        exit 0
+    fi
+    exit 1
+fi

@@ -195,6 +195,39 @@ curl -s https://raw.githubusercontent.com/containers/storage/main/drivers/overla
   | grep -n "redirectDiffIfAdditionalLayer\|DiffGetter" | head -5
 ```
 
+### Known behaviour: composefs `bootc upgrade` "already up to date" refusal
+
+**Reported in `projectbluefin/common#1417`** (composefs images such as
+Dakota). Symptom when the newest image is already booted or staged:
+
+```
+error: Upgrading composefs: Performing Upgrade Operation:
+  Target image has the same fs-verity digest as the existing Some(Booted) deployment.
+```
+
+`bootc upgrade` exits **1** here, but the system is current, not broken. This
+is distinct from #1332: #1332 is a genuine *pull* failure in the overlay
+`containers-storage:` path; #1417 is a *refusal* from a successful comparison
+that happens to use a non-zero exit.
+
+**Action by repo:** handled in the privileged helper
+`system_files/shared/usr/libexec/bootc-update-stage` (invoked by ChairLift's
+manual "check for updates now"). Instead of `exec /usr/bin/bootc upgrade`, it
+now runs `bootc upgrade`, and only when that exits non-zero does it re-check
+with a fast, read-only `bootc upgrade --check`; if the refusal text
+(`Target image has the same fs-verity digest as the existing … deployment`)
+appears, it prints `System image is already up to date.` and exits 0. Any
+*other* failure keeps its original exit code. The helper's security contract is
+unchanged — it reads no arguments, never forwards argv to bootc, and carries
+none of the reboot/finalize/registry-skip flags (`tests/…
+/test_chairlift_config.py::test_bootc_stage_script_is_executable_and_stages_only`,
+`tests/test_bootc_update_stage.bats`). The `--check` re-check is read-only and
+never stages a deployment.
+
+**For end-user reports:** no workaround needed — the system already has the
+latest image. If a *different* error (network, signature, pull failure) shows
+up, that is not #1417; re-run the update or file a new report.
+
 ---
 
 ## What NOT to do
