@@ -113,10 +113,15 @@ MOCK
     _write_mock "bootc" <<'MOCK'
 #!/bin/bash
 echo "bootc $*" >> "${COMMAND_LOG}"
-if [[ "${MOCK_BOOTC_STATUS:-0}" != "0" ]]; then
-    echo "mock bootc upgrade failure" >&2
+# Only the real `bootc upgrade` verb reports the composefs refusal; an invalid
+# subcommand (e.g. a bare `--check`) is a clap usage error, like real bootc.
+if [[ "${1:-}" == "upgrade" ]]; then
+    if [[ "${MOCK_BOOTC_STATUS:-0}" != "0" ]]; then
+        printf '%s\n' "${MOCK_BOOTC_OUTPUT:-mock bootc upgrade failure}" >&2
+    fi
+    exit "${MOCK_BOOTC_STATUS:-0}"
 fi
-exit "${MOCK_BOOTC_STATUS:-0}"
+exit 2
 MOCK
 
     # An installed copy must never take over the native recipes.
@@ -171,6 +176,7 @@ _run() {
         COMMAND_LOG="${COMMAND_LOG}" \
         SYSTEMD_STATE="${SYSTEMD_STATE}" \
         MOCK_BOOTC_STATUS="${MOCK_BOOTC_STATUS:-0}" \
+        MOCK_BOOTC_OUTPUT="${MOCK_BOOTC_OUTPUT:-}" \
         MOCK_HAS_UUPD_TIMER="${MOCK_HAS_UUPD_TIMER:-0}" \
         MOCK_ACTIVE_SERVICE="${MOCK_ACTIVE_SERVICE:-}" \
         MOCK_ENABLED_TIMER="${MOCK_ENABLED_TIMER:-}" \
@@ -218,6 +224,41 @@ MOCK
         MOCK_BREW_BIN="${MOCKDIR}/brew" _run "${UPDATE_SCRIPT}"
     [ "${status}" -eq 42 ]
     [[ "${output}" == *"mock bootc upgrade failure"* ]]
+    run ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
+}
+
+# projectbluefin/common#1417: on composefs, "up to date" is reported by refusing
+# to upgrade with a non-zero exit and a "same fs-verity digest" message. That
+# refusal is not a failure: the update must continue, and a later real failure
+# must still be reported.
+@test "update: treats composefs up-to-date refusal as success and still updates flatpaks" {
+    _write_mock "brew" <<'MOCK'
+#!/bin/bash
+echo "brew $*" >> "${COMMAND_LOG}"
+MOCK
+    MOCK_BOOTC_STATUS=1 \
+        MOCK_BOOTC_OUTPUT='error: Upgrading composefs: Target image has the same fs-verity digest as the existing Some(Booted) deployment.' \
+        MOCK_FLATPAK_REMOTES=$'system\nuser' MOCK_BREW_BIN="${MOCKDIR}/brew" _run "${UPDATE_SCRIPT}"
+    [ "${status}" -eq 0 ]
+    grep -qF "sudo bootc upgrade" "${COMMAND_LOG}"
+    grep -qFx "sudo bootc upgrade --check" "${COMMAND_LOG}"
+    grep -qF "flatpak update -y" "${COMMAND_LOG}"
+    grep -qFx "brew upgrade" "${COMMAND_LOG}"
+}
+
+@test "update: treats staged composefs refusal as success" {
+    MOCK_BOOTC_STATUS=1 \
+        MOCK_BOOTC_OUTPUT='error: Upgrading composefs: Target image has the same fs-verity digest as the existing Some(Staged) deployment.' \
+        _run "${UPDATE_SCRIPT}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "update: a composefs refusal with a different error still fails" {
+    MOCK_BOOTC_STATUS=1 \
+        MOCK_BOOTC_OUTPUT='error: failed to fetch remote: network unreachable' \
+        _run "${UPDATE_SCRIPT}"
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"network unreachable"* ]]
     run ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
 }
 
@@ -417,9 +458,13 @@ PY
                     tail="${tail%%]*}"
                     tail="${tail%%#*}"
                     # Any whitespace-separated token starting with "--" is a
-                    # bootc flag; that is the regression we are guarding.
+                    # bootc flag; that is the regression we are guarding. The
+                    # read-only `--check` re-check on failure is allowed
+                    # explicitly (review #1545): it keeps the bare `upgrade`
+                    # verb and only reads the refusal text.
                     for tok in ${tail}; do
                         case "${tok}" in
+                            --check) ;;
                             --*)
                                 echo "REJECTED flag '${tok}' in: '${line}'" >&2
                                 bad=1

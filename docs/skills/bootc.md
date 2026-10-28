@@ -224,6 +224,19 @@ none of the reboot/finalize/registry-skip flags (`tests/…
 `tests/test_bootc_update_stage.bats`). The `--check` re-check is read-only and
 never stages a deployment.
 
+The `ujust update` recipe (`system_files/shared/usr/share/ublue-os/just/update.just`)
+applies the same refusal handling to the interactive path: it treats that exact
+refusal — matched by the full substring `Target image has the same fs-verity
+digest as the existing` — as success while any other failure keeps its exit
+code. bootc is kept attached to the terminal so its progress bars survive; on a
+non-zero exit the recipe only re-runs `bootc upgrade --check` to read the refusal
+text, rather than buffering the real run through a pipe.
+
+**Do not** convert this into a `bootc switch` / `--download-only` workaround:
+those change the staged-deployment semantics that ChairLift and uupd rely on.
+This is documented behaviour, not the `#1332` readlink bug — keep the two
+sections apart.
+
 **For end-user reports:** no workaround needed — the system already has the
 latest image. If a *different* error (network, signature, pull failure) shows
 up, that is not #1417; re-run the update or file a new report.

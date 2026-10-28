@@ -20,7 +20,22 @@ update:
         exit 1
     fi
     echo "Starting OS image update (this may take a while as layers download)..."
-    sudo bootc upgrade || exit $?
+    # bootc upgrade is documented as idempotent, but on composefs it exits 1 when
+    # the newest image is already booted or staged ("same fs-verity digest"). Treat
+    # that specific refusal as success; any other failure keeps its exit status.
+    # Keep bootc on the terminal so its indicatif progress bars survive; only re-run
+    # `bootc upgrade --check` on failure to read the refusal text.
+    upgrade_status=0
+    sudo bootc upgrade || upgrade_status=$?
+    if [[ "${upgrade_status}" -ne 0 ]]; then
+        # Read-only re-check: keep the bare `upgrade` verb so bootc accepts it,
+        # and only read the refusal text on failure.
+        if sudo bootc upgrade --check 2>&1 | grep -qF "Target image has the same fs-verity digest as the existing"; then
+            echo "System image is already up to date."
+        else
+            exit "${upgrade_status}"
+        fi
+    fi
     # Updates system Flatpaks
     if flatpak remotes | grep -q system; then
         flatpak update -y
