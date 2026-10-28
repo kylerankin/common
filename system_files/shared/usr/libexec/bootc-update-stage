@@ -38,7 +38,9 @@ set -euo pipefail
 # digest as the existing ... deployment". That means the system is current,
 # not broken, so treat only that refusal as success; any other failure keeps
 # its original exit code (projectbluefin/common#1417).
-if ! /usr/bin/bootc upgrade; then
+rc=0
+/usr/bin/bootc upgrade || rc=$?
+if [ "$rc" -ne 0 ]; then
     # `--check` is a fast, read-only registry probe (not a multi-gigabyte
     # pull), so reading its output is fine here. `|| true` keeps `set -e`/
     # `pipefail` from tripping on the expected non-zero exit.
@@ -48,5 +50,5 @@ if ! /usr/bin/bootc upgrade; then
         echo "System image is already up to date."
         exit 0
     fi
-    exit 1
+    exit "$rc"
 fi

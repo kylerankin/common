@@ -81,12 +81,14 @@ REAL_ERROR='error: failed to pull and update: connection refused'
     grep -qFx "System image is already up to date." <<<"${output}"
 }
 
-@test "bootc-update-stage: a different error still exits non-zero" {
-    _install_mock_bootc 1 "${REAL_ERROR}"
+@test "bootc-update-stage: a different error preserves its exit code" {
+    # A distinctive code (not 0/1) proves the helper forwards bootc's real
+    # exit status instead of collapsing every failure to `exit 1`.
+    _install_mock_bootc 42 "${REAL_ERROR}"
     run env STAGE_CALLS="${WORKDIR}/calls.log" \
-        MOCK_BOOTC_EXIT=1 MOCK_BOOTC_MSG="${REAL_ERROR}" \
+        MOCK_BOOTC_EXIT=42 MOCK_BOOTC_MSG="${REAL_ERROR}" \
         PATH="${WORKDIR}/bin" "${WORKDIR}/stage.sh"
-    [ "${status}" -ne 0 ]
+    [ "${status}" -eq 42 ]
 }
 
 @test "bootc-update-stage: a successful update exits 0" {
