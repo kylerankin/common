@@ -180,9 +180,17 @@ def bundle_index_text() -> str:
 
 def bundle_skill_text(path: Path, skill_id: str) -> str:
     src = path.relative_to(REPO_ROOT).as_posix()
+    text = path.read_text()
+    match = FRONTMATTER_RE.match(text)
+    if match is None:
+        return ON_DEVICE_BANNER.format(src=src) + text
+    # Ship the YAML front matter as the first bytes so every skill loader that
+    # expects front matter at the top of the copied file still parses it.
     return (
-        ON_DEVICE_BANNER.format(src=src)
-        + path.read_text()
+        text[: match.end()]
+        + "\n"
+        + ON_DEVICE_BANNER.format(src=src)
+        + text[match.end():]
     )
 
 
@@ -199,6 +207,14 @@ def write_bundle() -> None:
         (skills_dir / f"{skill_id}.md").write_text(
             bundle_skill_text(path, skill_id)
         )
+    # --write should be self-healing: a source skill that lost its
+    # `scope: on-device` flag used to leave an orphan copy behind and make
+    # --check fail with an error --write could never clear. Drop any copy that
+    # is no longer in the catalog.
+    expected = {f"{sid}.md" for _, sid in on_device_skills()}
+    for stale in skills_dir.iterdir():
+        if stale.is_file() and stale.name not in expected:
+            stale.unlink()
 
 
 def check_bundle() -> list[str]:

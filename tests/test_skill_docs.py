@@ -529,6 +529,13 @@ def test_generate_skill_index_writes_on_device_bundle(
     assert (bundle / "skills/beta.md").exists()
     assert not (bundle / "skills/gamma.md").exists()
     assert "ON-DEVICE EDITION" in (bundle / "skills/alpha.md").read_text()
+    # The banner must sit below the YAML front matter so the shipped copy still
+    # parses as a skill. `bundle_skill_text` is the exact function --write uses,
+    # so asserting on it (not just the written file) covers generation too.
+    alpha_src = repo_root / "docs" / "skills" / "alpha.md"
+    bundle_text = mod.bundle_skill_text(alpha_src, "alpha")
+    assert mod.FRONTMATTER_RE.match(bundle_text) is not None
+    assert bundle_text.index("---\n") < bundle_text.index("ON-DEVICE EDITION")
 
     monkeypatch.setattr(sys, "argv", ["generate_skill_index.py", "--check"])
     assert mod.main() == 0
@@ -568,3 +575,23 @@ def test_bundle_check_fails_on_source_edit(
     monkeypatch.setattr(sys, "argv", ["generate_skill_index.py", "--check"])
     assert mod.main() == 1
     assert "is stale" in capsys.readouterr().err
+
+
+def test_write_bundle_removes_stale_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A source skill that later loses its `scope: on-device` flag must not leave
+    # an orphaned copy behind that --check would then refuse to clear.
+    repo_root = _on_device_tree(tmp_path)
+    mod = load_generate_skill_index()
+    patch_skill_index_paths(mod, repo_root)
+    monkeypatch.setattr(sys, "argv", ["generate_skill_index.py", "--write"])
+    assert mod.main() == 0
+    bundle = _bundle_dir(repo_root)
+    assert (bundle / "skills/beta.md").exists()
+
+    # Drop beta's on-device scope, then regenerate.
+    beta_src = repo_root / "docs" / "skills" / "beta.md"
+    beta_src.write_text(beta_src.read_text().replace("scope: on-device\n", ""))
+    assert mod.main() == 0
+    assert not (bundle / "skills/beta.md").exists()

@@ -38,6 +38,21 @@ cat /usr/share/ublue-os/image-info.json
 content-addressable inside the `projectbluefin/common` image and is verifiable
 by signature — do not write image names or tags from memory.
 
+## Logs, reporting, and what you can change
+
+The root filesystem is read-only on a running machine, so you cannot edit the
+system itself. Here is where to look and what actually works:
+
+- Logs: `ujust logs-this-boot`, `ujust logs-last-boot`, or `journalctl -b`.
+- Report a problem: `ujust report` gathers a bug report and files it in the
+  tracker named by `BUG_REPORT_URL` in `/etc/os-release`.
+- Change something for real: user-level overrides under your home directory, or
+  a new image. There is no way to make a persistent system change by writing to
+  `/` — see "What to do when asked to change something" for the read-only rule.
+- Find what the image is built from: `cat /usr/share/ublue-os/image-info.json`
+  or `/usr/libexec/ublue-booted-image` shows the source ref and tag the image
+  was built from.
+
 ## What to do when asked to change something
 
 1. Confirm the task belongs here. Common is the shared OCI layer consumed by
