@@ -24,7 +24,7 @@ jobs:
           tool: just
 
       - name: Install pre-commit
-        run: pip install pre-commit
+        run: pip install pre-commit==4.7.0
 
       - name: Verify tooling
         run: |

@@ -38,6 +38,12 @@ repos:
         entry: 'uses:(?!.*projectbluefin/).*@(main|master|latest|v[0-9])'
         types: [yaml]
         files: '\.github/workflows/'
+      - id: no-unpinned-pip-tools
+        name: Block unpinned pip installs in workflows
+        language: system
+        entry: python3 scripts/check-pip-pinned.py
+        pass_filenames: false
+        always_run: true
       - id: no-floating-source-checkout
         name: Block unpinned git checkouts (tags, branches) in build stages
         language: pygrep

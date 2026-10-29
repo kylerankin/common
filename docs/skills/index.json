@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-24",
+  "generated_at": "2026-10-29",
   "schema_version": "1.0",
   "skills": [
     {
@@ -122,7 +122,7 @@
       ],
       "description": "CI policy and tooling \u2014 SHA pinning, pre-commit guards, Renovate digest tracking, and workflow config. Use when editing .github/workflows/ files.",
       "version": "2.4",
-      "last_updated": "2026-09-26",
+      "last_updated": "2026-10-29",
       "doc_type": "reference"
     },
     {

@@ -1,7 +1,7 @@
 ---
 name: ci-tooling
 version: "2.4"
-last_updated: "2026-09-26"
+last_updated: "2026-10-29"
 id: ci-tooling
 one_line_purpose: Apply CI policy for SHA pinning, pre-commit, and Renovate tooling.
 entry_point: docs/skills/ci-tooling/SKILL.md
@@ -103,6 +103,19 @@ uses: actions/checkout@main
 
 See [pre-commit-conventions.md](references/pre-commit-conventions.md) for the full auto-fix loop, AI attribution, schema validation, Skill drift detection, and Docs hygiene hooks.
 
+## Pinning pip-installed Python tools
+
+Every Python tool a pull-request check installs must be pinned to an exact
+version (`name==version`). A bare `pip install pytest` resolves to whatever is
+newest on the index at run time, so a check can silently change behavior with
+no workflow change. The `no-unpinned-pip-tools` pre-commit hook
+(`scripts/check-pip-pinned.py`) scans every YAML file under `.github/` and
+fails a commit when a `pip install` line contains an unpinned package. It runs
+inside the existing "Run pre-commit" step of the Validate PR workflow, just like
+the SHA-pinning hook above. See [pip-pinning.md](references/pip-pinning.md) for
+the policy, the exact rules (which flags and forms it understands), and how to
+add a new install.
+
 ---
 
 ## Docs hygiene pre-commit checks
@@ -150,6 +163,7 @@ These are **hygiene gates**, not blocking CI workflow gates. The front-matter si
 | File | Description |
 |---|---|
 | [ACTIONS-SECURITY.md](../../../ACTIONS-SECURITY.md) | Organization GitHub Actions security baseline (top-level `permissions: {}`, SHA pinning, `pull_request_target` scoping, checksum verification). |
+| [references/pip-pinning.md](references/pip-pinning.md) | Pin every Python tool a pull-request check installs to an exact version, and the `no-unpinned-pip-tools` pre-commit hook that fails a PR when an unpinned install is found. |
 | [references/sha-pinning.md](references/sha-pinning.md) | Full SHA pinning policy, how to find/update SHAs, internal refs, Floating-tag guard regex and exemptions, Renovate vs pre-commit. |
 | [references/pre-commit-conventions.md](references/pre-commit-conventions.md) | Pre-commit auto-fix loop, AI commit attribution, release-state.yaml schema validation, Skill drift detection, Docs hygiene hooks. |
 | [references/renovate-and-tools.md](references/renovate-and-tools.md) | Renovate OCI digest tracking, Renovate Actions coverage outside `.github/workflows`, fork processing in the org runner, Trivy scan-image archive input, multi-arch build matrix, Shellcheck in validate.yml, Renovate versioned-binary tracking. |
