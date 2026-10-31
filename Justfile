@@ -5,7 +5,7 @@ just := just_executable()
 # reason; tests/test_suite_registration.bats enforces that.
 # Run unit tests (pytest for hooks.py, bats for shell scripts)
 test:
-    python3 -m pytest tests/test_hooks.py tests/test_actions_security.py tests/test_check_oci_refs.py tests/test_curated_config.py tests/test_skill_docs.py tests/test_chairlift_config.py tests/test_renovate_config.py tests/test_render_hidamari_movie.py tests/test_flatpark_remote.py -v
+    python3 -m pytest tests/test_hooks.py tests/test_python_install_pins.py tests/test_actions_security.py tests/test_check_oci_refs.py tests/test_curated_config.py tests/test_skill_docs.py tests/test_chairlift_config.py tests/test_renovate_config.py tests/test_render_hidamari_movie.py tests/test_flatpark_remote.py -v
     bats tests/test_libsetup.bats
     bats tests/test_setup_scripts.bats
     bats tests/test_bling.bats
@@ -56,6 +56,7 @@ test:
     bats tests/test_udev_rules.bats
     bats tests/test_projectbluefin_countme.bats
     bats tests/test_toggle_devmode.bats
+    bats tests/test_compass.bats
 
 # Preview Bazaar config from this checkout on the local machine
 bazaar-preview:
