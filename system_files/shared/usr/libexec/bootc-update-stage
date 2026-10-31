@@ -38,17 +38,18 @@ set -euo pipefail
 # digest as the existing ... deployment". That means the system is current,
 # not broken, so treat only that refusal as success; any other failure keeps
 # its original exit code (projectbluefin/common#1417).
+#
+# Classify from this run's own stderr (mirrored to a temp file, still
+# streamed). Never re-run bootc to find out why it failed: when the image is
+# already pulled, even `bootc upgrade --check` reaches do_upgrade() and stages.
+err_log="$(mktemp)"
+trap 'rm -f "$err_log"' EXIT
+exec 3>&1
 rc=0
-/usr/bin/bootc upgrade || rc=$?
-if [ "$rc" -ne 0 ]; then
-    # `--check` is a fast, read-only registry probe (not a multi-gigabyte
-    # pull), so reading its output is fine here. `|| true` keeps `set -e`/
-    # `pipefail` from tripping on the expected non-zero exit.
-    check_output="$(/usr/bin/bootc upgrade --check 2>&1 || true)"
-    if printf '%s\n' "$check_output" \
-            | grep -qF "Target image has the same fs-verity digest as the existing"; then
-        echo "System image is already up to date."
-        exit 0
-    fi
-    exit "$rc"
+/usr/bin/bootc upgrade 2>&1 1>&3 | tee "$err_log" >&2 || rc=${PIPESTATUS[0]}
+if [ "$rc" -ne 0 ] \
+        && grep -qF "Target image has the same fs-verity digest as the existing" "$err_log"; then
+    echo "System image is already up to date."
+    exit 0
 fi
+exit "$rc"

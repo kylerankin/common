@@ -234,23 +234,20 @@ def test_bootc_stage_script_is_executable_and_stages_only():
 
     The helper is checked on its code lines (not the whole file), because the
     header comment legitimately names the forbidden flags while explaining
-    why they are absent. `pkexec` runs this script as root, so a bare
-    substring match would be too weak: it would also accept
-    `exec /some/other/tool "bootc upgrade"`. The read-only `--check`
-    re-check that handles the composefs "up to date" refusal (#1417) is the
-    one allowed extra flag; a runtime test confirms it never stages.
+    why they are absent. `pkexec` runs this script as root, so pin the exact
+    set of bootc invocations: one plain `/usr/bin/bootc upgrade`, nothing
+    else. A substring match would also accept
+    `exec /some/other/tool "bootc upgrade"` or an extra `bootc switch …` line.
     """
     assert BOOTC_STAGE_SCRIPT.stat().st_mode & 0o111, (
         "bootc-update-stage must be executable"
     )
-    code = "\n".join(_stage_script_code_lines())
-    # The staging verb is run (the upgrade, plus the read-only re-check),
-    # never a different tool. Match the full `/usr/bin/bootc` path so the
-    # check would reject `exec /some/other/tool "bootc upgrade"` (the char
-    # before the matched path must not extend it into a longer path).
-    assert re.search(r"(?<![\w.])/usr/bin/bootc upgrade\b", code), (
-        "bootc-update-stage must run plain `/usr/bin/bootc upgrade"
-    )
+    code_lines = _stage_script_code_lines()
+    bootc_lines = [line for line in code_lines if "bootc" in line]
+    assert bootc_lines == [
+        '/usr/bin/bootc upgrade 2>&1 1>&3 | tee "$err_log" >&2 || rc=${PIPESTATUS[0]}'
+    ], f"bootc-update-stage must run exactly `/usr/bin/bootc upgrade`: {bootc_lines!r}"
+    code = "\n".join(code_lines)
     # Never reboots, locks finalization, or skips the registry check.
     for flag in FORBIDDEN_BOOTC_FLAGS:
         assert not re.search(rf"(?<![\w-]){re.escape(flag)}(?:=|\b)", code), (

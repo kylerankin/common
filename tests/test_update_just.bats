@@ -113,15 +113,17 @@ MOCK
     _write_mock "bootc" <<'MOCK'
 #!/bin/bash
 echo "bootc $*" >> "${COMMAND_LOG}"
-# Only the real `bootc upgrade` verb reports the composefs refusal; an invalid
-# subcommand (e.g. a bare `--check`) is a clap usage error, like real bootc.
-if [[ "${1:-}" == "upgrade" ]]; then
+# Plain `upgrade` reports MOCK_BOOTC_OUTPUT on failure. Any other invocation
+# behaves like current bootc after a pull (`No changes in: …`, exit 0), so a
+# recipe that classified the failure by re-running bootc would misreport it.
+if [[ "$*" == "upgrade" ]]; then
     if [[ "${MOCK_BOOTC_STATUS:-0}" != "0" ]]; then
         printf '%s\n' "${MOCK_BOOTC_OUTPUT:-mock bootc upgrade failure}" >&2
     fi
     exit "${MOCK_BOOTC_STATUS:-0}"
 fi
-exit 2
+echo "No changes in: mock"
+exit 0
 MOCK
 
     # An installed copy must never take over the native recipes.
@@ -240,8 +242,8 @@ MOCK
         MOCK_BOOTC_OUTPUT='error: Upgrading composefs: Target image has the same fs-verity digest as the existing Some(Booted) deployment.' \
         MOCK_FLATPAK_REMOTES=$'system\nuser' MOCK_BREW_BIN="${MOCKDIR}/brew" _run "${UPDATE_SCRIPT}"
     [ "${status}" -eq 0 ]
-    grep -qF "sudo bootc upgrade" "${COMMAND_LOG}"
-    grep -qFx "sudo bootc upgrade --check" "${COMMAND_LOG}"
+    [ "$(grep -c '^bootc ' "${COMMAND_LOG}")" -eq 1 ]
+    grep -qFx "bootc upgrade" "${COMMAND_LOG}"
     grep -qF "flatpak update -y" "${COMMAND_LOG}"
     grep -qFx "brew upgrade" "${COMMAND_LOG}"
 }
@@ -251,6 +253,7 @@ MOCK
         MOCK_BOOTC_OUTPUT='error: Upgrading composefs: Target image has the same fs-verity digest as the existing Some(Staged) deployment.' \
         _run "${UPDATE_SCRIPT}"
     [ "${status}" -eq 0 ]
+    [ "$(grep -c '^bootc ' "${COMMAND_LOG}")" -eq 1 ]
 }
 
 @test "update: a composefs refusal with a different error still fails" {
@@ -259,6 +262,7 @@ MOCK
         _run "${UPDATE_SCRIPT}"
     [ "${status}" -eq 1 ]
     [[ "${output}" == *"network unreachable"* ]]
+    [ "$(grep -c '^bootc ' "${COMMAND_LOG}")" -eq 1 ]
     run ! grep -qE '^(flatpak|brew) ' "${COMMAND_LOG}"
 }
 
@@ -458,13 +462,9 @@ PY
                     tail="${tail%%]*}"
                     tail="${tail%%#*}"
                     # Any whitespace-separated token starting with "--" is a
-                    # bootc flag; that is the regression we are guarding. The
-                    # read-only `--check` re-check on failure is allowed
-                    # explicitly (review #1545): it keeps the bare `upgrade`
-                    # verb and only reads the refusal text.
+                    # bootc flag; that is the regression we are guarding.
                     for tok in ${tail}; do
                         case "${tok}" in
-                            --check) ;;
                             --*)
                                 echo "REJECTED flag '${tok}' in: '${line}'" >&2
                                 bad=1

@@ -1,7 +1,7 @@
 ---
 name: bootc
 version: "1.2"
-last_updated: "2026-10-01"
+last_updated: "2026-10-31"
 id: bootc
 one_line_purpose: Work with bootc image build, update, and Containerfile mechanics.
 entry_point: docs/skills/bootc.md
@@ -210,27 +210,28 @@ is distinct from #1332: #1332 is a genuine *pull* failure in the overlay
 `containers-storage:` path; #1417 is a *refusal* from a successful comparison
 that happens to use a non-zero exit.
 
-**Action by repo:** handled in the privileged helper
-`system_files/shared/usr/libexec/bootc-update-stage` (invoked by ChairLift's
-manual "check for updates now"). Instead of `exec /usr/bin/bootc upgrade`, it
-now runs `bootc upgrade`, and only when that exits non-zero does it re-check
-with a fast, read-only `bootc upgrade --check`; if the refusal text
-(`Target image has the same fs-verity digest as the existing … deployment`)
-appears, it prints `System image is already up to date.` and exits 0. Any
-*other* failure keeps its original exit code. The helper's security contract is
-unchanged — it reads no arguments, never forwards argv to bootc, and carries
-none of the reboot/finalize/registry-skip flags (`tests/…
-/test_chairlift_config.py::test_bootc_stage_script_is_executable_and_stages_only`,
-`tests/test_bootc_update_stage.bats`). The `--check` re-check is read-only and
-never stages a deployment.
+**Action by repo:** both callers run `bootc upgrade` once, mirror its stderr to
+a temp file while still streaming it, and on a non-zero exit match the refusal
+text (`Target image has the same fs-verity digest as the existing`). A match
+prints `System image is already up to date.` and counts as success; any other
+failure keeps its original exit code.
 
-The `ujust update` recipe (`system_files/shared/usr/share/ublue-os/just/update.just`)
-applies the same refusal handling to the interactive path: it treats that exact
-refusal — matched by the full substring `Target image has the same fs-verity
-digest as the existing` — as success while any other failure keeps its exit
-code. bootc is kept attached to the terminal so its progress bars survive; on a
-non-zero exit the recipe only re-runs `bootc upgrade --check` to read the refusal
-text, rather than buffering the real run through a pipe.
+- `system_files/shared/usr/libexec/bootc-update-stage` — the privileged helper
+  behind ChairLift's manual "check for updates now". Its security contract is
+  unchanged: no arguments read, no argv forwarded, exactly one
+  `/usr/bin/bootc upgrade` and none of the reboot/finalize/registry-skip flags
+  (`tests/test_chairlift_config.py::test_bootc_stage_script_is_executable_and_stages_only`,
+  `tests/test_bootc_update_stage.bats`).
+- `system_files/shared/usr/share/ublue-os/just/update.just` — `ujust update`.
+  stdout stays on the terminal; stderr goes through `tee`, so bootc's progress
+  bars (indicatif, stderr) are hidden.
+
+**Never classify by re-running bootc.** `bootc upgrade --check` is not
+read-only on composefs: in upstream `crates/lib/src/bootc_composefs/update.rs`
+(v1.17.1 `upgrade_composefs`), when the image is already pulled and
+`validate_update` returns `Proceed`, `do_upgrade` runs *before* the
+`if opts.check` early return and stages. Newer bootc also answers a re-run with
+`No changes in: …` (exit 0), so the refusal text never reappears.
 
 **Do not** convert this into a `bootc switch` / `--download-only` workaround:
 those change the staged-deployment semantics that ChairLift and uupd rely on.

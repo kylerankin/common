@@ -21,33 +21,43 @@ _setup() {
     sed "s#/usr/bin/bootc#${WORKDIR}/bin/bootc#g" "${STAGE_SCRIPT}" \
         > "${WORKDIR}/stage.sh"
     chmod +x "${WORKDIR}/stage.sh"
-    # The helper runs under `#!/usr/bin/env bash` and calls grep by name;
-    # keep the sandbox self-contained by symlink-only the tools it needs
-    # (bootc itself is reached by the redirected absolute path, so no host
-    # bootc can leak in).
-    for tool in bash grep; do
+    # The helper runs under `#!/usr/bin/env bash`; keep the sandbox
+    # self-contained by symlinking only the tools it needs (bootc itself is
+    # reached by the redirected absolute path, so no host bootc can leak in).
+    for tool in bash cat grep mktemp rm tee; do
         ln -s "$(command -v ${tool})" "${WORKDIR}/bin/${tool}"
     done
 }
 
-# Install a mock bootc. MOCK_BOOTC_EXIT is the exit code it returns for every
-# invocation; MOCK_BOOTC_MSG (if non-empty) is printed to stderr first, so a
-# non-zero exit can carry the composefs refusal text or a different error.
+# Install a mock bootc. Plain `upgrade` prints MOCK_BOOTC_MSG (if set) to
+# stderr and exits MOCK_BOOTC_EXIT. Any other invocation behaves like current
+# bootc after a pull (`No changes in: …`, exit 0), so a helper that classified
+# the failure by re-running bootc would misreport it.
 _install_mock_bootc() {
-    local exit_code="$1" msg="${2:-}"
-    {
-        echo '#!/usr/bin/bash'
-        printf 'printf "%%s\\n" "$*" >> "${STAGE_CALLS}"\n'
-        echo 'if [ "${MOCK_BOOTC_EXIT}" -ne 0 ] && [ -n "${MOCK_BOOTC_MSG:-}" ]; then'
-        printf '    printf "%%s\\n" "%s" >&2\n' "${msg}"
-        echo 'fi'
-        echo 'exit "${MOCK_BOOTC_EXIT}"'
-    } > "${WORKDIR}/bin/bootc"
+    cat > "${WORKDIR}/bin/bootc" <<'MOCK'
+#!/usr/bin/bash
+printf '%s\n' "$*" >> "${STAGE_CALLS}"
+if [ "$*" = "upgrade" ]; then
+    [ -n "${MOCK_BOOTC_MSG:-}" ] && printf '%s\n' "${MOCK_BOOTC_MSG}" >&2
+    exit "${MOCK_BOOTC_EXIT}"
+fi
+echo "No changes in: mock"
+exit 0
+MOCK
     chmod +x "${WORKDIR}/bin/bootc"
+}
+
+_run_stage() {
+    run env STAGE_CALLS="${WORKDIR}/calls.log" \
+        MOCK_BOOTC_EXIT="$1" MOCK_BOOTC_MSG="${2:-}" \
+        PATH="${WORKDIR}/bin" "${WORKDIR}/stage.sh"
+    # The helper classifies the one real run; bootc is never invoked twice.
+    [ "$(cat "${WORKDIR}/calls.log")" = "upgrade" ]
 }
 
 setup() {
     _setup
+    _install_mock_bootc
 }
 
 teardown() {
@@ -64,39 +74,26 @@ UP_TO_DATE_STAGED='error: Upgrading composefs: Performing Upgrade Operation: Tar
 REAL_ERROR='error: failed to pull and update: connection refused'
 
 @test "bootc-update-stage: already-booted composefs refusal exits 0" {
-    _install_mock_bootc 1 "${UP_TO_DATE_BOOTED}"
-    run env STAGE_CALLS="${WORKDIR}/calls.log" \
-        MOCK_BOOTC_EXIT=1 MOCK_BOOTC_MSG="${UP_TO_DATE_BOOTED}" \
-        PATH="${WORKDIR}/bin" "${WORKDIR}/stage.sh"
+    _run_stage 1 "${UP_TO_DATE_BOOTED}"
     [ "${status}" -eq 0 ]
     grep -qFx "System image is already up to date." <<<"${output}"
 }
 
 @test "bootc-update-stage: already-staged composefs refusal exits 0" {
-    _install_mock_bootc 1 "${UP_TO_DATE_STAGED}"
-    run env STAGE_CALLS="${WORKDIR}/calls.log" \
-        MOCK_BOOTC_EXIT=1 MOCK_BOOTC_MSG="${UP_TO_DATE_STAGED}" \
-        PATH="${WORKDIR}/bin" "${WORKDIR}/stage.sh"
+    _run_stage 1 "${UP_TO_DATE_STAGED}"
     [ "${status}" -eq 0 ]
     grep -qFx "System image is already up to date." <<<"${output}"
 }
 
-@test "bootc-update-stage: a different error preserves its exit code" {
+@test "bootc-update-stage: a different error preserves its exit code and output" {
     # A distinctive code (not 0/1) proves the helper forwards bootc's real
     # exit status instead of collapsing every failure to `exit 1`.
-    _install_mock_bootc 42 "${REAL_ERROR}"
-    run env STAGE_CALLS="${WORKDIR}/calls.log" \
-        MOCK_BOOTC_EXIT=42 MOCK_BOOTC_MSG="${REAL_ERROR}" \
-        PATH="${WORKDIR}/bin" "${WORKDIR}/stage.sh"
+    _run_stage 42 "${REAL_ERROR}"
     [ "${status}" -eq 42 ]
+    grep -qFx "${REAL_ERROR}" <<<"${output}"
 }
 
 @test "bootc-update-stage: a successful update exits 0" {
-    _install_mock_bootc 0
-    run env STAGE_CALLS="${WORKDIR}/calls.log" \
-        MOCK_BOOTC_EXIT=0 \
-        PATH="${WORKDIR}/bin" "${WORKDIR}/stage.sh"
+    _run_stage 0
     [ "${status}" -eq 0 ]
-    # The read-only re-check must never run on a healthy upgrade.
-    ! grep -q "upgrade --check" "${WORKDIR}/calls.log"
 }
