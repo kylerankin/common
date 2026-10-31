@@ -26,7 +26,7 @@ update:
     # Classify from this run's stderr (mirrored, stdout stays on the terminal);
     # never re-run bootc, since `bootc upgrade --check` can stage when the image
     # is already pulled.
-    # ponytail: stderr is a pipe here, so bootc's indicatif bars are hidden;
+    # Trade-off: stderr is a pipe here, so bootc's indicatif bars are hidden;
     # wrap in `script` if progress matters more than the extra dependency.
     upgrade_err="$(mktemp)"
     trap 'rm -f "${upgrade_err}"' EXIT
